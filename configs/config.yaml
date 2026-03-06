@@ -1,0 +1,56 @@
+# ─────────────────────────────────────────────────────────────────
+# CHisIEC NER — Master Config
+# Chỉnh sửa file này, KHÔNG hardcode trong code
+# ─────────────────────────────────────────────────────────────────
+
+project:
+  name: "chisiec_ner"
+  seed: 42
+
+data:
+  train: "data/train.txt"
+  dev:   "data/dev.txt"
+  test:  "data/test.txt"
+  max_len: 128
+
+model:
+  # Chọn 1 trong 3: guwenbert_crf | roberta_bilstm_crf | roberta_kan_crf
+  method: "guwenbert_crf"
+
+  # Pretrained backbone (tự động map theo method nếu để null)
+  backbone: null
+
+  # BiLSTM params (chỉ dùng khi method=roberta_bilstm_crf)
+  lstm_hidden: 256
+  lstm_layers: 2
+
+  # KAN params (chỉ dùng khi method=roberta_kan_crf)
+  kan_hidden: 512
+  kan_knots: 8
+
+  dropout: 0.1
+
+training:
+  epochs: 10
+  batch_size: 16
+  bert_lr: 2.0e-5
+  head_lr: 1.0e-3
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  grad_clip: 1.0
+  fp16: true                   # mixed precision — bật khi chạy Kaggle GPU
+
+early_stopping:
+  enabled: true
+  patience: 3                  # dừng nếu dev F1 không tăng sau 3 epoch
+  min_delta: 0.001
+
+checkpoint:
+  output_dir: "outputs"
+  save_top_k: 1                # giữ top-k checkpoint tốt nhất
+
+logging:
+  level: "INFO"
+  use_wandb: false             # đổi true khi muốn dùng WandB
+  wandb_project: "chisiec-ner"
+  wandb_entity: null           # username WandB của bạn
