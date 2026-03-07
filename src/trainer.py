@@ -141,6 +141,8 @@ class Trainer:
                 "epoch": epoch, "train_loss": train_loss,
                 "dev_f1": dev_f1, "elapsed": round(elapsed, 1),
             })
+            # Free GPU cache sau mỗi epoch
+            torch.cuda.empty_cache()
 
             # Early stopping
             if self.early_stop and self.early_stop.step(dev_f1):
