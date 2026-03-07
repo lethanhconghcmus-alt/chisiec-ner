@@ -173,7 +173,7 @@ def make_dataloader(
     max_len:   int,
     batch_size: int,
     shuffle:   bool,
-    num_workers: int = 2,
+    num_workers: int = 0,
 ) -> DataLoader:
     dataset = NERDataset(data, tokenizer, label2id, max_len)
     return DataLoader(
