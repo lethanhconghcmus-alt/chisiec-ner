@@ -8,7 +8,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
-from TorchCRF import CRF
+from torchcrf import CRF
 from collections import defaultdict
 from tqdm import tqdm
 from seqeval.metrics import classification_report, f1_score
