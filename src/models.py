@@ -8,7 +8,7 @@ models.py — 3 NER Models:
 import torch
 import torch.nn as nn
 from transformers import AutoModel
-from TorchCRF import CRF
+from torchcrf import CRF
 from src.utils import get_logger
 
 logger = get_logger(__name__)
