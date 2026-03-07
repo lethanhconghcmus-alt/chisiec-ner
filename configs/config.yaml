@@ -11,7 +11,8 @@ data:
   train: "data/train.txt"
   dev:   "data/dev.txt"
   test:  "data/test.txt"
-  max_len: 128
+  max_len: 256
+  stride: 128
 
 model:
   # Chọn 1 trong 3: guwenbert_crf | roberta_bilstm_crf | roberta_kan_crf
@@ -32,7 +33,7 @@ model:
 
 training:
   epochs: 10
-  batch_size: 16
+  batch_size: 8
   bert_lr: 2.0e-5
   head_lr: 1.0e-3
   weight_decay: 0.01
