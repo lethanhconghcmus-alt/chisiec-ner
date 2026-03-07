@@ -111,39 +111,11 @@ def build_label_map(train_data: list) -> tuple[dict, dict]:
 
 # ── DATASET ───────────────────────────────────────────────────────────────────
 class NERDataset(Dataset):
-    def __init__(
-        self,
-        data: list,
-        tokenizer: AutoTokenizer,
-        label2id: dict[str, int],
-        max_len: int = 128,
-        stride: int = 64,
-    ):
+    def __init__(self, data, tokenizer, label2id, max_len=128):
         self.data = data
         self.tok = tokenizer
         self.label2id = label2id
         self.max_len = max_len
-        self.stride = stride
-
-        # build sliding windows
-        self.windows = []
-
-        for sent_id, (tokens, labels) in enumerate(self.data):
-            n = len(tokens)
-
-            if n <= max_len:
-                self.windows.append((sent_id, 0, n))
-            else:
-                start = 0
-                while start < n:
-                    end = min(start + max_len, n)
-
-                    self.windows.append((sent_id, start, end))
-
-                    if end == n:
-                        break
-
-                    start += stride
     def __len__(self):
         return len(self.windows)
 
