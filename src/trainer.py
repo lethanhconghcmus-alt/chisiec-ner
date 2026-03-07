@@ -73,10 +73,14 @@ class Trainer:
         self.model.train()
         total_loss, n_steps = 0.0, 0
 
-        for batch in tqdm(loader, desc="  train", leave=False, dynamic_ncols=True):
+        for step, batch in enumerate(tqdm(loader, desc="  train", leave=False, dynamic_ncols=True)):
+            if step % 50 == 0:
+                print(f"[train] step={step}", flush=True)
             input_ids      = batch["input_ids"].to(self.device)
             attention_mask = batch["attention_mask"].to(self.device)
-            token_type_ids = batch["token_type_ids"].to(self.device)
+            token_type_ids = batch.get("token_type_ids", None)
+            if token_type_ids is not None:
+                 token_type_ids = token_type_ids.to(self.device)
             labels         = batch["labels"].to(self.device)
 
             optimizer.zero_grad()
