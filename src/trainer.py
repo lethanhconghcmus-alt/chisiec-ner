@@ -104,7 +104,7 @@ class Trainer:
             total_loss += loss.item()
             n_steps    += 1
 
-        return total_loss / n_steps
+        return total_loss / max(1, n_steps)
 
     # ── MAIN TRAIN LOOP ───────────────────────────────────────────────────────
     def train(self, train_loader, dev_loader, evaluator) -> dict:
