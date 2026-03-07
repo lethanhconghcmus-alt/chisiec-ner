@@ -117,18 +117,43 @@ class NERDataset(Dataset):
         tokenizer: AutoTokenizer,
         label2id:  dict[str, int],
         max_len:   int = 128,
+        stride:    int = 128,   # NEW
     ):
         self.data     = data
         self.tok      = tokenizer
         self.label2id = label2id
         self.max_len  = max_len
+                self.stride = stride
 
+        # build sliding windows
+        self.windows = []
+
+        for sent_id, (tokens, labels) in enumerate(self.data):
+            n = len(tokens)
+
+            if n <= max_len:
+                self.windows.append((sent_id, 0, n))
+            else:
+                start = 0
+                while start < n:
+                    end = min(start + max_len, n)
+
+                    self.windows.append((sent_id, start, end))
+
+                    if end == n:
+                        break
+
+                    start += stride
     def __len__(self):
-        return len(self.data)
+        return len(self.windows)
 
     def __getitem__(self, idx: int) -> dict:
-        tokens, labels = self.data[idx]
+        sent_id, start, end = self.windows[idx]
 
+        tokens, labels = self.data[sent_id]
+
+        tokens = tokens[start:end]
+        labels = labels[start:end]
         enc = self.tok(
             tokens,
             is_split_into_words=True,
