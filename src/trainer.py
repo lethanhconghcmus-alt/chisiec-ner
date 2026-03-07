@@ -113,7 +113,7 @@ class Trainer:
         for epoch in range(1, tcfg.epochs + 1):
             t0 = time.time()
             logger.info(f"\n{'='*55}\nEpoch {epoch}/{tcfg.epochs}")
-
+            print(f"\n>>> Epoch {epoch}/{tcfg.epochs} bắt đầu...", flush=True)
             train_loss      = self._train_epoch(train_loader, optimizer, scheduler)
             dev_f1, dev_rep = evaluator.evaluate(dev_loader)
             elapsed         = time.time() - t0
@@ -122,6 +122,7 @@ class Trainer:
                 f"  loss={train_loss:.4f} | dev_f1={dev_f1:.4f} | "
                 f"time={elapsed:.1f}s"
             )
+            print(f"[Epoch {epoch}/{tcfg.epochs}] loss={train_loss:.4f} | dev_f1={dev_f1:.4f} | time={elapsed:.1f}s", flush=True)  # ← thêm
 
             # WandB log
             if self.wandb_run:
