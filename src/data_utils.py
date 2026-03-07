@@ -155,50 +155,6 @@ class NERDataset(Dataset):
             "attention_mask": attention_mask,
             "labels": torch.tensor(label_ids)
         }
-
-    def __getitem__(self, idx: int) -> dict:
-        sent_id, start, end = self.windows[idx]
-
-        tokens, labels = self.data[sent_id]
-
-        tokens = tokens[start:end]
-        labels = labels[start:end]
-        enc = self.tok(
-            tokens,
-            is_split_into_words=True,
-            max_length=self.max_len,
-            padding="max_length",
-            truncation=True,
-            return_tensors="pt",
-        )
-
-        input_ids      = enc["input_ids"].squeeze()
-        attention_mask = enc["attention_mask"].squeeze()
-        token_type_ids = enc.get(
-            "token_type_ids", torch.zeros_like(input_ids)
-        ).squeeze()
-
-        # Align labels to subword tokens
-        label_ids, prev_word = [], None
-        for word_id in enc.word_ids():
-            if word_id is None:
-                label_ids.append(-100)
-            elif word_id != prev_word:
-                label_ids.append(self.label2id.get(labels[word_id], 0))
-            else:
-                label_ids.append(-100)   # subword: ignore in loss
-            prev_word = word_id
-
-        label_ids = (label_ids + [-100] * self.max_len)[: self.max_len]
-
-        return dict(
-            input_ids      = input_ids,
-            attention_mask = attention_mask,
-            token_type_ids = token_type_ids,
-            labels         = torch.tensor(label_ids, dtype=torch.long),
-        )
-
-
 # ── DATALOADER FACTORY ────────────────────────────────────────────────────────
 def make_dataloader(
     data:      list,
