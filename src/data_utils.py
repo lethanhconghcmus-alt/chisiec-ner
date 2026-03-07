@@ -111,13 +111,50 @@ def build_label_map(train_data: list) -> tuple[dict, dict]:
 
 # ── DATASET ───────────────────────────────────────────────────────────────────
 class NERDataset(Dataset):
+
     def __init__(self, data, tokenizer, label2id, max_len=128):
         self.data = data
         self.tok = tokenizer
         self.label2id = label2id
         self.max_len = max_len
+
     def __len__(self):
-        return len(self.windows)
+        return len(self.data)
+
+    def __getitem__(self, idx):
+
+        tokens, labels = self.data[idx]
+
+        enc = self.tok(
+            tokens,
+            is_split_into_words=True,
+            max_length=self.max_len,
+            padding="max_length",
+            truncation=True,
+            return_tensors="pt",
+        )
+
+        input_ids = enc["input_ids"].squeeze()
+        attention_mask = enc["attention_mask"].squeeze()
+
+        label_ids = []
+        prev_word = None
+
+        for word_id in enc.word_ids():
+            if word_id is None:
+                label_ids.append(-100)
+            elif word_id != prev_word:
+                label_ids.append(self.label2id[labels[word_id]])
+            else:
+                label_ids.append(-100)
+
+            prev_word = word_id
+
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": torch.tensor(label_ids)
+        }
 
     def __getitem__(self, idx: int) -> dict:
         sent_id, start, end = self.windows[idx]
