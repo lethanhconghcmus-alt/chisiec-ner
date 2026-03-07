@@ -87,7 +87,8 @@ class Trainer:
 
             if self.use_fp16:
                 with autocast():
-                    loss, _ = self.model(input_ids, attention_mask, token_type_ids, labels)
+                    emissions = emissions.float()
+                    loss = -self.crf(emissions, tags, mask=mask, reduction="mean")
                 self.scaler.scale(loss).backward()
                 self.scaler.unscale_(optimizer)
                 nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.training.grad_clip)
