@@ -53,7 +53,7 @@ def crf_step(
     # torchcrf is safer in fp32 even under autocast
     logits = logits.float()
     base_mask = attention_mask.bool()
-
+    mask[:, 0] = True
     if labels is not None:
         # Replace ignore index (-100) with a valid tag id (e.g. 0),
         # and mask those positions out of the CRF objective.
