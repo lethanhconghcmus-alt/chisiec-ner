@@ -1,6 +1,6 @@
 torch>=2.0.0
 transformers>=4.38.0
-torchcrf>=1.1.0
+pytorch-crf>=0.7.2
 seqeval>=1.2.2
 omegaconf>=2.3.0
 wandb>=0.16.0
