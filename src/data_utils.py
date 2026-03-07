@@ -180,7 +180,6 @@ def make_dataloader(
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
-        num_workers=num_workers,
-        pin_memory=torch.cuda.is_available(),
-        persistent_workers=(num_workers > 0),
+        num_workers=0,
+        pin_memory=False,
     )
