@@ -34,38 +34,25 @@ def _bert_forward(bert, input_ids, attention_mask, token_type_ids=None):
 
 
 # ── SHARED CRF HELPER ─────────────────────────────────────────────────────────
-def crf_step(
-    crf: CRF,
-    logits: torch.Tensor,
-    attention_mask: torch.Tensor,
-    labels: torch.Tensor | None = None,
-):
+def crf_step(crf, logits, attention_mask, labels=None):
     """
     Training  → returns (loss, logits)
-    Inference → returns list of decoded tag sequences
-
-    Notes:
-    - torchcrf often expects float32; in fp16 training, cast logits to float32
-      before CRF computation to avoid stalls / NaNs.
-    - We mask out padding tokens via attention_mask, and we also ignore subword
-      positions labeled as -100 by masking them out of CRF loss.
+    Inference → returns decoded sequence
     """
-    # torchcrf is safer in fp32 even under autocast
-    logits = logits.float()
-    base_mask = attention_mask.bool()
-    mask[:, 0] = True
-    if labels is not None:
-        # Replace ignore index (-100) with a valid tag id (e.g. 0),
-        # and mask those positions out of the CRF objective.
-        crf_labels = labels.clone()
-        ignore_mask = (crf_labels == -100)
-        crf_labels[ignore_mask] = 0
 
-        valid_mask = base_mask & (~ignore_mask)
-        loss = -crf(logits, crf_labels, mask=valid_mask, reduction="mean")
+    mask = attention_mask.bool()
+
+    # CRF requirement: first timestep must be valid
+    mask[:, 0] = True
+
+    if labels is not None:
+        crf_labels = labels.clone()
+        crf_labels[crf_labels == -100] = 0
+
+        loss = -crf(logits, crf_labels, mask=mask, reduction="mean")
         return loss, logits
 
-    return crf.decode(logits, mask=base_mask)
+    return crf.decode(logits, mask=mask)
 
 # ── MODEL 1: GuwenBERT + CRF ──────────────────────────────────────────────────
 class BertCRF(nn.Module):
