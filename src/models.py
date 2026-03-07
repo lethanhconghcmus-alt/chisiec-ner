@@ -111,30 +111,32 @@ class RobertaBiLSTMCRF(nn.Module):
 # ── MODEL 3: RoBERTa + KAN + CRF ─────────────────────────────────────────────
 class KANLayer(nn.Module):
     """
-    Kolmogorov-Arnold Network layer dùng Gaussian RBF basis functions.
-    Thay thế projection tuyến tính bằng các hàm đơn biến có thể học được,
-    giúp nắm bắt các pattern phi tuyến trong văn bản cổ điển.
+    Optimized KAN layer: project input xuống proj_dim trước khi apply RBF basis,
+    giảm tensor size từ (B,L,768,K) xuống (B,L,proj_dim,K) → nhanh hơn ~6x.
     """
 
-    def __init__(self, in_dim: int, out_dim: int, num_knots: int = 8):
+    def __init__(self, in_dim: int, out_dim: int, num_knots: int = 8, proj_dim: int = 128):
         super().__init__()
-        # Cố định knot positions (không train), chỉ train coefficients
+        # 1) Project xuống proj_dim trước (linear, cheap)
+        self.proj = nn.Linear(in_dim, proj_dim, bias=False)
+        # 2) KAN trên proj_dim (nhỏ hơn nhiều)
         self.register_buffer("knots", torch.linspace(0, 1, num_knots))
-        self.log_bandwidth = nn.Parameter(torch.zeros(1))          # learnable width
-        self.coeff         = nn.Parameter(
-            torch.randn(in_dim, num_knots, out_dim) * 0.02
+        self.log_bandwidth = nn.Parameter(torch.zeros(1))
+        self.coeff = nn.Parameter(
+            torch.randn(proj_dim, num_knots, out_dim) * 0.02
         )
-        self.residual      = nn.Linear(in_dim, out_dim)            # skip connection
+        # 3) Skip connection từ in_dim gốc
+        self.residual = nn.Linear(in_dim, out_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (B, L, in_dim)
         bw     = torch.exp(self.log_bandwidth)
-        x_norm = torch.sigmoid(x)                                  # normalize to [0,1]
-        diff   = x_norm.unsqueeze(-1) - self.knots                 # (B, L, in, K)
-        basis  = torch.exp(-bw * diff ** 2)                        # (B, L, in, K)
-        # Aggregate over knots weighted by learned coefficients
-        kan_out = torch.einsum("blij,ijo->blo", basis, self.coeff) # (B, L, out)
-        return kan_out + self.residual(x)                          # skip connection
+        xp     = torch.sigmoid(self.proj(x))           # (B, L, proj_dim)
+        diff   = xp.unsqueeze(-1) - self.knots          # (B, L, proj_dim, K)
+        basis  = torch.exp(-bw * diff ** 2)             # (B, L, proj_dim, K)
+        # einsum giờ nhỏ hơn: (B,L,128,8) x (128,8,out_dim)
+        kan_out = torch.einsum("blpk,pko->blo", basis, self.coeff)  # (B, L, out_dim)
+        return kan_out + self.residual(x)
 
 
 class RobertaKANCRF(nn.Module):
