@@ -8,7 +8,7 @@ models.py — 3 NER Models:
 import torch
 import torch.nn as nn
 from transformers import AutoModel
-from TorchCRF import CRF
+from torchcrf import CRF
 
 from src.utils import get_logger
 
@@ -21,26 +21,52 @@ MODEL_BACKBONE = {
 }
 
 
+
+# ── BACKBONE FORWARD HELPER ───────────────────────────────────────────────
+def _bert_forward(bert, input_ids, attention_mask, token_type_ids=None):
+    """Call HF backbone safely across BERT/RoBERTa style models.
+    - Some backbones ignore/ don't have token_type_ids (type_vocab_size==1).
+    - Use keyword args to avoid signature mismatches.
+    """
+    kwargs = {"input_ids": input_ids, "attention_mask": attention_mask}
+    if token_type_ids is not None and getattr(bert.config, "type_vocab_size", 1) > 1:
+        kwargs["token_type_ids"] = token_type_ids
+    return bert(**kwargs).last_hidden_state
+
+
 # ── SHARED CRF HELPER ─────────────────────────────────────────────────────────
 def crf_step(
     crf: CRF,
     logits: torch.Tensor,
     attention_mask: torch.Tensor,
-    labels = None,
+    labels: torch.Tensor | None = None,
 ):
     """
     Training  → returns (loss, logits)
     Inference → returns list of decoded tag sequences
+
+    Notes:
+    - torchcrf often expects float32; in fp16 training, cast logits to float32
+      before CRF computation to avoid stalls / NaNs.
+    - We mask out padding tokens via attention_mask, and we also ignore subword
+      positions labeled as -100 by masking them out of CRF loss.
     """
-    mask = attention_mask.bool()
+    # torchcrf is safer in fp32 even under autocast
+    logits = logits.float()
+    base_mask = attention_mask.bool()
+
     if labels is not None:
+        # Replace ignore index (-100) with a valid tag id (e.g. 0),
+        # and mask those positions out of the CRF objective.
         crf_labels = labels.clone()
-        crf_labels[crf_labels == -100] = 0
-        valid_mask = mask
+        ignore_mask = (crf_labels == -100)
+        crf_labels[ignore_mask] = 0
+
+        valid_mask = base_mask & (~ignore_mask)
         loss = -crf(logits, crf_labels, mask=valid_mask, reduction="mean")
         return loss, logits
-    return crf.decode(logits, mask=mask)
 
+    return crf.decode(logits, mask=base_mask)
 
 # ── MODEL 1: GuwenBERT + CRF ──────────────────────────────────────────────────
 class BertCRF(nn.Module):
@@ -60,7 +86,7 @@ class BertCRF(nn.Module):
 
     def forward(self, input_ids, attention_mask, token_type_ids, labels=None):
         seq    = self.drop(
-            self.bert(input_ids, attention_mask, token_type_ids).last_hidden_state
+            _bert_forward(self.bert, input_ids, attention_mask, token_type_ids)
         )
         logits = self.fc(seq)
         return crf_step(self.crf, logits, attention_mask, labels)
@@ -101,7 +127,7 @@ class RobertaBiLSTMCRF(nn.Module):
 
     def forward(self, input_ids, attention_mask, token_type_ids, labels=None):
         seq       = self.drop(
-            self.bert(input_ids, attention_mask, token_type_ids).last_hidden_state
+            _bert_forward(self.bert, input_ids, attention_mask, token_type_ids)
         )
         lstm_o, _ = self.lstm(seq)
         logits    = self.fc(lstm_o)
@@ -111,32 +137,30 @@ class RobertaBiLSTMCRF(nn.Module):
 # ── MODEL 3: RoBERTa + KAN + CRF ─────────────────────────────────────────────
 class KANLayer(nn.Module):
     """
-    Optimized KAN layer: project input xuống proj_dim trước khi apply RBF basis,
-    giảm tensor size từ (B,L,768,K) xuống (B,L,proj_dim,K) → nhanh hơn ~6x.
+    Kolmogorov-Arnold Network layer dùng Gaussian RBF basis functions.
+    Thay thế projection tuyến tính bằng các hàm đơn biến có thể học được,
+    giúp nắm bắt các pattern phi tuyến trong văn bản cổ điển.
     """
 
-    def __init__(self, in_dim: int, out_dim: int, num_knots: int = 8, proj_dim: int = 128):
+    def __init__(self, in_dim: int, out_dim: int, num_knots: int = 8):
         super().__init__()
-        # 1) Project xuống proj_dim trước (linear, cheap)
-        self.proj = nn.Linear(in_dim, proj_dim, bias=False)
-        # 2) KAN trên proj_dim (nhỏ hơn nhiều)
+        # Cố định knot positions (không train), chỉ train coefficients
         self.register_buffer("knots", torch.linspace(0, 1, num_knots))
-        self.log_bandwidth = nn.Parameter(torch.zeros(1))
-        self.coeff = nn.Parameter(
-            torch.randn(proj_dim, num_knots, out_dim) * 0.02
+        self.log_bandwidth = nn.Parameter(torch.zeros(1))          # learnable width
+        self.coeff         = nn.Parameter(
+            torch.randn(in_dim, num_knots, out_dim) * 0.02
         )
-        # 3) Skip connection từ in_dim gốc
-        self.residual = nn.Linear(in_dim, out_dim)
+        self.residual      = nn.Linear(in_dim, out_dim)            # skip connection
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (B, L, in_dim)
         bw     = torch.exp(self.log_bandwidth)
-        xp     = torch.sigmoid(self.proj(x))           # (B, L, proj_dim)
-        diff   = xp.unsqueeze(-1) - self.knots          # (B, L, proj_dim, K)
-        basis  = torch.exp(-bw * diff ** 2)             # (B, L, proj_dim, K)
-        # einsum giờ nhỏ hơn: (B,L,128,8) x (128,8,out_dim)
-        kan_out = torch.einsum("blpk,pko->blo", basis, self.coeff)  # (B, L, out_dim)
-        return kan_out + self.residual(x)
+        x_norm = torch.sigmoid(x)                                  # normalize to [0,1]
+        diff   = x_norm.unsqueeze(-1) - self.knots                 # (B, L, in, K)
+        basis  = torch.exp(-bw * diff ** 2)                        # (B, L, in, K)
+        # Aggregate over knots weighted by learned coefficients
+        kan_out = torch.einsum("blij,ijo->blo", basis, self.coeff) # (B, L, out)
+        return kan_out + self.residual(x)                          # skip connection
 
 
 class RobertaKANCRF(nn.Module):
@@ -168,7 +192,7 @@ class RobertaKANCRF(nn.Module):
 
     def forward(self, input_ids, attention_mask, token_type_ids, labels=None):
         seq    = self.drop(
-            self.bert(input_ids, attention_mask, token_type_ids).last_hidden_state
+            _bert_forward(self.bert, input_ids, attention_mask, token_type_ids)
         )
         kan_o  = self.norm(self.kan(seq))
         logits = self.fc(kan_o)
