@@ -95,7 +95,8 @@ class CheckpointManager:
         best_path = self.output_dir / f"{self.method}_best.pt"
         if best_path.exists() or best_path.is_symlink():
             best_path.unlink()
-        shutil.copy(self.checkpoints[0]["path"], best_path)
+        if self.checkpoints and os.path.exists(self.checkpoints[0]["path"]):  # ← thêm check
+            shutil.copy(self.checkpoints[0]["path"], best_path)
 
         return str(ckpt_path) == self.checkpoints[0]["path"]
 
