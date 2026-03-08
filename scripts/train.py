@@ -43,8 +43,6 @@ def setup_wandb(cfg):
 
 def main():
     # ── Load config ───────────────────────────────────────────────
-    def main():
-    # ── Load config ───────────────────────────────────────────────
     cli_cfg  = OmegaConf.from_cli()
     
     # Cho phép chỉ định config file qua: python train.py config=configs/config_dvsk.yaml
