@@ -1,56 +1,47 @@
 # ─────────────────────────────────────────────────────────────────
-# CHisIEC NER — Master Config
-# Chỉnh sửa file này, KHÔNG hardcode trong code
+# DVSK NER — Config (transfer from CHisIEC)
 # ─────────────────────────────────────────────────────────────────
-
 project:
-  name: "chisiec_ner"
+  name: "dvsk_ner"
   seed: 42
 
 data:
-  train: "data/train.txt"
-  dev:   "data/dev.txt"
-  test:  "data/test.txt"
+  train: "data/dvsk/train.txt"
+  dev:   "data/dvsk/dev.txt"
+  test:  "data/dvsk/test.txt"
   max_len: 128
 
 model:
-  # Chọn 1 trong 3: guwenbert_crf | roberta_bilstm_crf | roberta_kan_crf
   method: "guwenbert_crf"
-
-  # Pretrained backbone (tự động map theo method nếu để null)
   backbone: null
-
-  # BiLSTM params (chỉ dùng khi method=roberta_bilstm_crf)
   lstm_hidden: 256
   lstm_layers: 2
-
-  # KAN params (chỉ dùng khi method=roberta_kan_crf)
   kan_hidden: 512
   kan_knots: 8
-
   dropout: 0.1
+  pretrained_ckpt: "outputs/guwenbert_crf/guwenbert_crf_best.pt"  # ← load từ CHisIEC
 
 training:
   epochs: 20
   batch_size: 16
-  bert_lr: 2.0e-5
+  bert_lr: 1.0e-5       # ← thấp hơn vì đang fine-tune từ checkpoint
   head_lr: 1.0e-3
   weight_decay: 0.01
   warmup_ratio: 0.1
   grad_clip: 1.0
-  fp16: true                   # mixed precision — bật khi chạy Kaggle GPU
+  fp16: true
 
 early_stopping:
   enabled: true
-  patience: 5                 # dừng nếu dev F1 không tăng sau 3 epoch
+  patience: 5
   min_delta: 0.001
 
 checkpoint:
-  output_dir: "outputs"
-  save_top_k: 1                # giữ top-k checkpoint tốt nhất
+  output_dir: "outputs/dvsk"   # ← output riêng, không đè CHisIEC
+  save_top_k: 1
 
 logging:
   level: "INFO"
-  use_wandb: false             # đổi true khi muốn dùng WandB
-  wandb_project: "chisiec-ner"
-  wandb_entity: null           # username WandB của bạn
+  use_wandb: false
+  wandb_project: "dvsk-ner"
+  wandb_entity: null
