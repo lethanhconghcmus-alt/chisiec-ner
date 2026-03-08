@@ -43,9 +43,15 @@ def setup_wandb(cfg):
 
 def main():
     # ── Load config ───────────────────────────────────────────────
-    base_cfg = OmegaConf.load("configs/config.yaml")
+    def main():
+    # ── Load config ───────────────────────────────────────────────
     cli_cfg  = OmegaConf.from_cli()
-    cfg      = OmegaConf.merge(base_cfg, cli_cfg)
+    
+    # Cho phép chỉ định config file qua: python train.py config=configs/config_dvsk.yaml
+    config_path = cli_cfg.pop("config", "configs/config.yaml")
+    
+    base_cfg = OmegaConf.load(config_path)
+    cfg      = OmegaConf.merge(base_cfg, cli_cfg) 
 
     method     = cfg.model.method
     output_dir = os.path.join(cfg.checkpoint.output_dir, method)
