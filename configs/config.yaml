@@ -10,8 +10,6 @@ data:
   dev:   "data/dvsk/dvsk_dev.txt"
   test:  "data/dvsk/dvsk_test.txt"
   max_len: 128
-  max_len: 128
-
 model:
   method: "guwenbert_crf"
   backbone: null
