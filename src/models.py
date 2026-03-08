@@ -186,6 +186,7 @@ class RobertaKANCRF(nn.Module):
 
 
 # ── FACTORY ───────────────────────────────────────────────────────────────────
+# ── FACTORY ───────────────────────────────────────────────────────────────────
 def build_model(cfg) -> nn.Module:
     """Build model từ OmegaConf config."""
     method   = cfg.model.method
@@ -193,10 +194,10 @@ def build_model(cfg) -> nn.Module:
     n_labels = cfg._num_labels       # set by trainer after building label map
 
     if method == "guwenbert_crf":
-        return BertCRF(backbone, n_labels, cfg.model.dropout)
+        model = BertCRF(backbone, n_labels, cfg.model.dropout)
 
     elif method == "roberta_bilstm_crf":
-        return RobertaBiLSTMCRF(
+        model = RobertaBiLSTMCRF(
             backbone, n_labels,
             lstm_hidden=cfg.model.lstm_hidden,
             num_layers=cfg.model.lstm_layers,
@@ -204,12 +205,34 @@ def build_model(cfg) -> nn.Module:
         )
 
     elif method == "roberta_kan_crf":
-        return RobertaKANCRF(
+        model = RobertaKANCRF(
             backbone, n_labels,
             kan_hidden=cfg.model.kan_hidden,
             kan_knots=cfg.model.kan_knots,
             dropout=cfg.model.dropout,
         )
 
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+    # ── TRANSFER LEARNING: load BERT weights từ checkpoint cũ ────────────────
+    pretrained_ckpt = getattr(cfg.model, "pretrained_ckpt", None)
+    if pretrained_ckpt:
+        logger.info(f"Loading pretrained BERT weights from: {pretrained_ckpt}")
+        ckpt = torch.load(pretrained_ckpt, map_location="cpu")
+        # Chỉ lấy bert.* weights, bỏ CRF/fc/lstm/kan
+        bert_weights = {
+            k[len("bert."):]: v
+            for k, v in ckpt.items()
+            if k.startswith("bert.")
+        }
+        missing, unexpected = model.bert.load_state_dict(bert_weights, strict=False)
+        logger.info(f"  Loaded {len(bert_weights)} BERT weights")
+        if missing:
+            logger.warning(f"  Missing keys: {missing[:5]}")
+        if unexpected:
+            logger.warning(f"  Unexpected keys: {unexpected[:5]}")
+
+    return model
     else:
         raise ValueError(f"Unknown method: {method}")
