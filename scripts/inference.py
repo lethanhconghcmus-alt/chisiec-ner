@@ -28,7 +28,7 @@ logger = get_logger(__name__)
 
 
 def load_trained_model(method: str, output_dir: str, device: torch.device):
-    """Load model + label map từ output directory."""
+    """Load model + label map từ output directory (dùng cho CLI)."""
     model_dir = os.path.join(output_dir, method)
     label_map = load_json(os.path.join(model_dir, "label_map.json"))
     label2id  = label_map["label2id"]
@@ -36,14 +36,10 @@ def load_trained_model(method: str, output_dir: str, device: torch.device):
 
     cfg = OmegaConf.create({
         "model": {
-            "method":       method,
-            "backbone":     None,
-            "lstm_hidden":  256,
-            "lstm_layers":  2,
-            "kan_hidden":   512,
-            "kan_knots":    8,
-            "dropout":      0.1,
-            "pretrained_ckpt": None,
+            "method": method, "backbone": None,
+            "lstm_hidden": 256, "lstm_layers": 2,
+            "kan_hidden": 512, "kan_knots": 8,
+            "dropout": 0.1, "pretrained_ckpt": None,
         },
         "_num_labels": len(label2id),
     })
@@ -56,31 +52,61 @@ def load_trained_model(method: str, output_dir: str, device: torch.device):
     return model, label2id, id2label
 
 
+# ── PUBLIC API (used by src/predictor.py) ─────────────────────────
+def load_model_and_assets(
+    method:          str = "guwenbert_crf",
+    checkpoint_path: str = "checkpoints/best.pt",
+    label_map_path:  str = "artifacts/label_map.json",
+):
+    """Load model + tokenizer + label maps. Used by src/predictor.py."""
+    device    = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    label_map = load_json(label_map_path)
+    label2id  = label_map["label2id"]
+    id2label  = {int(k): v for k, v in label_map["id2label"].items()}
+
+    cfg = OmegaConf.create({
+        "model": {
+            "method": method, "backbone": None,
+            "lstm_hidden": 256, "lstm_layers": 2,
+            "kan_hidden": 512, "kan_knots": 8,
+            "dropout": 0.1, "pretrained_ckpt": None,
+        },
+        "_num_labels": len(label2id),
+    })
+
+    model = build_model(cfg)
+    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    model.to(device).eval()
+
+    backbone  = MODEL_BACKBONE[method]
+    tokenizer = AutoTokenizer.from_pretrained(backbone)
+    logger.info(f"Model loaded from {checkpoint_path}")
+    return model, tokenizer, label2id, id2label, device
+
+
+def predict_text(text: str, model, tokenizer, id2label: dict, device) -> list:
+    """Predict entities từ raw text string. Used by src/predictor.py."""
+    tokens   = list(text.strip())
+    label2id = {v: k for k, v in id2label.items()}
+    result   = predict_sentence(tokens, model, tokenizer, label2id, id2label, device=device)
+    return entities_from_bio(result)
+
+
+# ─────────────────────────────────────────────────────────────────
 @torch.no_grad()
-def predict_sentence(
-    tokens:    list,
-    model,
-    tokenizer,
-    label2id:  dict,
-    id2label:  dict,
-    max_len:   int = 128,
-    device:    torch.device = torch.device("cpu"),
-) -> list:
+def predict_sentence(tokens, model, tokenizer, label2id, id2label,
+                     max_len=128, device=torch.device("cpu")):
     """Predict NER tags cho 1 câu. Returns list of (token, label)."""
     enc = tokenizer(
-        tokens,
-        is_split_into_words=True,
-        max_length=max_len,
-        padding="max_length",
-        truncation=True,
-        return_tensors="pt",
+        tokens, is_split_into_words=True,
+        max_length=max_len, padding="max_length",
+        truncation=True, return_tensors="pt",
     )
     input_ids      = enc["input_ids"].to(device)
     attention_mask = enc["attention_mask"].to(device)
     token_type_ids = torch.zeros_like(input_ids).to(device)
 
     preds = model(input_ids, attention_mask, token_type_ids)
-    # Handle both CRF (list of lists) and Linear (tensor) output
     if isinstance(preds, list):
         pred_ids = preds[0]
     else:
@@ -89,7 +115,7 @@ def predict_sentence(
     word_ids    = enc.word_ids()
     token_preds = {}
     prev_word   = None
-    for pos, (wid, pred) in enumerate(zip(word_ids, pred_ids)):
+    for wid, pred in zip(word_ids, pred_ids):
         if wid is None or wid == prev_word:
             prev_word = wid
             continue
@@ -122,9 +148,7 @@ def predict_file(input_path, output_path, model, tokenizer, label2id, id2label, 
     data = read_conll(input_path)
     with open(output_path, "w", encoding="utf-8") as f:
         for tokens, _ in data:
-            preds = predict_sentence(
-                tokens, model, tokenizer, label2id, id2label, device=device
-            )
+            preds = predict_sentence(tokens, model, tokenizer, label2id, id2label, device=device)
             for token, pred_label in preds:
                 f.write(f"{token}\t{pred_label}\n")
             f.write("\n")
@@ -138,7 +162,7 @@ def main(args):
     model, label2id, id2label = load_trained_model(args.method, args.output_dir, device)
 
     if args.text:
-        tokens   = list(args.text)   # character-level
+        tokens   = list(args.text)
         result   = predict_sentence(tokens, model, tokenizer, label2id, id2label, device=device)
         entities = entities_from_bio(result)
 
@@ -168,10 +192,10 @@ def main(args):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("--method",     default="guwenbert_crf",
+    p.add_argument("--method",      default="guwenbert_crf",
                    choices=list(MODEL_BACKBONE.keys()))
-    p.add_argument("--output_dir", default="outputs/ancient")
-    p.add_argument("--text",       default=None, help="Câu cần predict")
-    p.add_argument("--input_file", default=None, help="File CoNLL cần predict")
+    p.add_argument("--output_dir",  default="outputs/ancient")
+    p.add_argument("--text",        default=None)
+    p.add_argument("--input_file",  default=None)
     p.add_argument("--output_file", default="outputs/ancient/predictions.txt")
     main(p.parse_args())
