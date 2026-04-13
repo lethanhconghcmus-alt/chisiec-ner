@@ -16,12 +16,18 @@ outputs/
 *.bin
 *.safetensors
 
-# Logs
-*.log
+# Checkpoints
+checkpoints/*
+!checkpoints/.gitkeep
+
+# Experiment tracking
 wandb/
+
+# Jupyter
+.ipynb_checkpoints/
 
 # macOS
 .DS_Store
 
-# Jupyter
-.ipynb_checkpoints/
+# Logs
+*.log
