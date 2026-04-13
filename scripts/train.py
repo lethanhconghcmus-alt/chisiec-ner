@@ -1,8 +1,8 @@
 """
-train.py — Entry point training
+train.py — Entry point training Ancient Chinese NER
 Usage:
-  python scripts/train.py                                   # dùng config mặc định
-  python scripts/train.py model.method=roberta_bilstm_crf  # override bất kỳ field
+  python scripts/train.py                                      # dùng config mặc định
+  python scripts/train.py model.method=guwenbert_linear       # override method
   python scripts/train.py training.epochs=15 training.fp16=true
 """
 
@@ -23,7 +23,6 @@ logger = get_logger(__name__)
 
 
 def setup_wandb(cfg):
-    """Khởi tạo WandB nếu được bật trong config."""
     if not cfg.logging.use_wandb:
         return None
     try:
@@ -43,13 +42,10 @@ def setup_wandb(cfg):
 
 def main():
     # ── Load config ───────────────────────────────────────────────
-    cli_cfg  = OmegaConf.from_cli()
-    
-    # Cho phép chỉ định config file qua: python train.py config=configs/config_dvsk.yaml
+    cli_cfg     = OmegaConf.from_cli()
     config_path = cli_cfg.pop("config", "configs/config.yaml")
-    
-    base_cfg = OmegaConf.load(config_path)
-    cfg      = OmegaConf.merge(base_cfg, cli_cfg) 
+    base_cfg    = OmegaConf.load(config_path)
+    cfg         = OmegaConf.merge(base_cfg, cli_cfg)
 
     method     = cfg.model.method
     output_dir = os.path.join(cfg.checkpoint.output_dir, method)
@@ -72,16 +68,18 @@ def main():
     validate_data(test_data,  "test")
 
     label2id, id2label = build_label_map(train_data)
-    save_json({"label2id": label2id, "id2label": id2label},
-              os.path.join(output_dir, "label_map.json"))
+    save_json(
+        {"label2id": label2id, "id2label": {str(i): l for i, l in id2label.items()}},
+        os.path.join(output_dir, "label_map.json"),
+    )
 
     # ── Tokenizer ─────────────────────────────────────────────────
     from transformers import AutoTokenizer
     backbone  = cfg.model.backbone or MODEL_BACKBONE[method]
     tokenizer = AutoTokenizer.from_pretrained(backbone)
 
-    bs    = cfg.training.batch_size
-    ml    = cfg.data.max_len
+    bs = cfg.training.batch_size
+    ml = cfg.data.max_len
     train_loader = make_dataloader(train_data, tokenizer, label2id, ml, bs, shuffle=True)
     dev_loader   = make_dataloader(dev_data,   tokenizer, label2id, ml, bs, shuffle=False)
     test_loader  = make_dataloader(test_data,  tokenizer, label2id, ml, bs, shuffle=False)
@@ -101,10 +99,12 @@ def main():
 
     # ── Test ──────────────────────────────────────────────────────
     logger.info("\nLoading best checkpoint for test evaluation...")
-    model.load_state_dict(torch.load(trainer.ckpt_manager.best_path(), map_location=device))
+    model.load_state_dict(
+        torch.load(trainer.ckpt_manager.best_path(), map_location=device)
+    )
 
-    test_res  = evaluator.full_report(test_loader, split="test")
-    evaluator.confusion_matrix(test_loader, split="test")
+    test_res  = evaluator.full_report(test_loader,  split="test")
+    evaluator.confusion_matrix(test_loader,  split="test")
     evaluator.error_analysis(test_loader, test_data, split="test")
 
     # ── Save final results ────────────────────────────────────────

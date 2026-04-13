@@ -64,7 +64,10 @@ def validate_data(data: list, split_name: str = "data") -> dict:
             errors.append(f"Sentence {i}: empty")
             continue
         if len(tokens) != len(labels):
-            errors.append(f"Sentence {i}: token/label length mismatch ({len(tokens)} vs {len(labels)})")
+            errors.append(
+                f"Sentence {i}: token/label length mismatch "
+                f"({len(tokens)} vs {len(labels)})"
+            )
 
         label_counter.update(labels)
         token_lengths.append(len(tokens))
@@ -101,7 +104,7 @@ def validate_data(data: list, split_name: str = "data") -> dict:
 
 
 # ── LABEL MAP ─────────────────────────────────────────────────────────────────
-def build_label_map(train_data: list) -> tuple[dict, dict]:
+def build_label_map(train_data: list) -> tuple:
     label_set = sorted({l for _, labs in train_data for l in labs})
     label2id  = {l: i for i, l in enumerate(label_set)}
     id2label  = {i: l for l, i in label2id.items()}
@@ -113,16 +116,15 @@ def build_label_map(train_data: list) -> tuple[dict, dict]:
 class NERDataset(Dataset):
 
     def __init__(self, data, tokenizer, label2id, max_len=128):
-        self.data = data
-        self.tok = tokenizer
+        self.data     = data
+        self.tok      = tokenizer
         self.label2id = label2id
-        self.max_len = max_len
+        self.max_len  = max_len
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
-
         tokens, labels = self.data[idx]
 
         enc = self.tok(
@@ -134,7 +136,7 @@ class NERDataset(Dataset):
             return_tensors="pt",
         )
 
-        input_ids = enc["input_ids"].squeeze()
+        input_ids      = enc["input_ids"].squeeze()
         attention_mask = enc["attention_mask"].squeeze()
 
         label_ids = []
@@ -147,23 +149,24 @@ class NERDataset(Dataset):
                 label_ids.append(self.label2id[labels[word_id]])
             else:
                 label_ids.append(-100)
-
             prev_word = word_id
 
         return {
-            "input_ids": input_ids,
+            "input_ids":      input_ids,
             "attention_mask": attention_mask,
             "token_type_ids": torch.zeros_like(input_ids),
-            "labels": torch.tensor(label_ids)
+            "labels":         torch.tensor(label_ids),
         }
+
+
 # ── DATALOADER FACTORY ────────────────────────────────────────────────────────
 def make_dataloader(
-    data:      list,
-    tokenizer: AutoTokenizer,
-    label2id:  dict,
-    max_len:   int,
-    batch_size: int,
-    shuffle:   bool,
+    data:        list,
+    tokenizer:   AutoTokenizer,
+    label2id:    dict,
+    max_len:     int,
+    batch_size:  int,
+    shuffle:     bool,
     num_workers: int = 0,
 ) -> DataLoader:
     dataset = NERDataset(data, tokenizer, label2id, max_len)

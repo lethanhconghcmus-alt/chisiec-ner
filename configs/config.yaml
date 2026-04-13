@@ -1,30 +1,30 @@
 # ─────────────────────────────────────────────────────────────────
-# DVSK NER — Config (transfer from CHisIEC)
+# Ancient Chinese NER — Config
 # ─────────────────────────────────────────────────────────────────
 project:
-  name: "dvsk_ner"
+  name: "ancient_chinese_ner"
   seed: 42
 
 data:
-  train: "data/dvsk/dvsk_train.txt"
-  dev:   "data/dvsk/dvsk_dev.txt"
-  test:  "data/dvsk/dvsk_test.txt"
+  train: "data/ancient/train.txt"
+  dev:   "data/ancient/dev.txt"
+  test:  "data/ancient/test.txt"
   max_len: 128
-  
+
 model:
-  method: "guwenbert_crf"
-  backbone: null
+  method: "guwenbert_crf"   # guwenbert_crf | guwenbert_linear
+  backbone: null             # null = dùng default theo method
   lstm_hidden: 256
   lstm_layers: 2
   kan_hidden: 512
   kan_knots: 8
   dropout: 0.1
-  pretrained_ckpt: "outputs/guwenbert_crf/guwenbert_crf_best.pt"  # ← load từ CHisIEC
+  pretrained_ckpt: null      # null = train từ đầu
 
 training:
   epochs: 20
   batch_size: 16
-  bert_lr: 1.0e-5       # ← thấp hơn vì đang fine-tune từ checkpoint
+  bert_lr: 1.0e-5
   head_lr: 1.0e-3
   weight_decay: 0.01
   warmup_ratio: 0.1
@@ -37,11 +37,11 @@ early_stopping:
   min_delta: 0.001
 
 checkpoint:
-  output_dir: "outputs/dvsk"   # ← output riêng, không đè CHisIEC
+  output_dir: "outputs/ancient"
   save_top_k: 1
 
 logging:
   level: "INFO"
   use_wandb: false
-  wandb_project: "dvsk-ner"
+  wandb_project: "ancient-chinese-ner"
   wandb_entity: null
