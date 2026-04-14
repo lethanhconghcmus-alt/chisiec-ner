@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  ancient-chinese-ner:
+    platform: linux/x86_64
+
+    build:
+      context: ./ancient-chinese-ner
+      dockerfile: Dockerfile
+
+    container_name: meta-ancient-chinese-ner
+    restart: always
+
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - WORKERS=4
+      - CHECKPOINT_PATH=/app/checkpoints/best.pt
+      - LABEL_MAP_PATH=/app/artifacts/label_map.json
+
+    volumes:
+      - ./ancient-chinese-ner/checkpoints:/app/checkpoints
+      - ./ancient-chinese-ner/artifacts:/app/artifacts
+
+    ports:
+      - "9001:9001"
+ 
