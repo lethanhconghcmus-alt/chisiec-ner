@@ -16,10 +16,10 @@ from src.models import GuwenBertCRF
 logger = logging.getLogger("api.predictor")
 
 BACKBONE   = os.getenv("BACKBONE",   "ethanyt/guwenbert-base")
-CKPT_PATH  = os.getenv("CKPT_PATH",  "outputs/ancient/guwenbert_crf/best.pt")
+CKPT_PATH  = os.getenv("CHECKPOINT_PATH",  "outputs/ancient/guwenbert_crf/best.pt")
 LABEL_MAP  = os.getenv("LABEL_MAP",  "outputs/ancient/guwenbert_crf/label_map.json")
 MAX_LEN    = int(os.getenv("MAX_LEN", "128"))
-DEVICE     = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE     = torch.device(os.getenv("DEVICE",  "cpu"))
 
 
 class Predictor:
