@@ -14,6 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Source code only — checkpoints mounted via docker-compose
 COPY src/  src/
 COPY api/  api/
+COPY artifacts/ artifacts/
 
 # Env defaults (override at runtime or via docker-compose)
 ENV BACKBONE=ethanyt/guwenbert-base
