@@ -16,14 +16,6 @@ COPY src/  src/
 COPY api/  api/
 COPY artifacts/ artifacts/
 
-# Env defaults (override at runtime or via docker-compose)
-ENV BACKBONE=ethanyt/guwenbert-base
-ENV CKPT_PATH=outputs/ancient/guwenbert_crf/best.pt
-ENV LABEL_MAP=outputs/ancient/guwenbert_crf/label_map.json
-ENV MAX_LEN=128
-
-# Recommended: --memory=3g in docker-compose (model ~1.2GB, peak ~1.5GB)
-
 EXPOSE 8000
 
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

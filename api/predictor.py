@@ -36,7 +36,7 @@ class Predictor:
 
         logger.info("Loading model checkpoint from %s", CKPT_PATH)
         self.model = GuwenBertCRF(BACKBONE, num_labels)
-        state = torch.load(CHECKPOINT_PATH, map_location=DEVICE)
+        state = torch.load(CKPT_PATH, map_location=DEVICE)
         self.model.load_state_dict(state)
         self.model.to(DEVICE)
         self.model.eval()
