@@ -119,5 +119,5 @@ docker run -p 8000:8000 \
 ## Notes
 
 - `best.pt` must match `label_map.json`
-- Model weights are loaded from a mounted volume — not included in this repository
+- Model weights are loaded from a mounted volume - not included in this repository
 - Repository contains only code and lightweight artifacts
