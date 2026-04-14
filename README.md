@@ -1,95 +1,123 @@
 # Ancient Chinese NER
 
-NER pipeline for Ancient Chinese text using GuwenBERT + CRF.
+A Named Entity Recognition (NER) system for Ancient Chinese text using GuwenBERT + CRF.
 
-**Trained on:** AnChineseNERE + CHisIEC + BEEVETA + C-CLUE  
-**Entity types:** PER · LOC · TITLE · DTM · ORG  
-**Backbone:** `ethanyt/guwenbert-base`
+| | |
+|---|---|
+| **Backbone** | `ethanyt/guwenbert-base` |
+| **Architecture** | BERT + CRF |
+| **Entity Types** | `PER` `LOC` `TITLE` `DTM` `ORG` |
+| **Training Data** | AnChineseNERE · CHisIEC · BEEVETA · C-CLUE |
 
 ---
 
-## Repo Structure
+## Project Structure
 
 ```
-├── src/
-│   ├── models.py        # GuwenBertCRF, GuwenBertLinear
-│   └── data_utils.py    # CoNLL reader, NERDataset
 ├── api/
-│   ├── main.py          # FastAPI app
-│   └── predictor.py     # Inference logic
-├── outputs/
-│   └── ancient/
-│       └── guwenbert_crf/
-│           ├── best.pt
-│           └── label_map.json
+│   ├── main.py           # FastAPI app
+│   └── predictor.py      # Inference logic
+├── src/
+│   ├── models.py         # GuwenBertCRF model
+│   └── data_utils.py     # Dataset + preprocessing
+├── scripts/
+│   ├── train.py          # Training script
+│   └── inference.py      # Load model + predict
+├── configs/
+│   └── config.yaml
+├── artifacts/
+│   └── label_map.json    # Label mapping (kept in repo)
 ├── Dockerfile
+├── docker-compose.yml
 └── requirements.txt
 ```
 
 ---
 
-## API
+## Model & Deployment
 
-### Start server
+> **Model weights (`best.pt`) are NOT stored in this repository.**  
+> They are loaded from an external storage location (e.g. server volume).
+
+Expected runtime paths:
+
+```
+/app/checkpoints/best.pt
+/app/artifacts/label_map.json
+```
+
+---
+
+## Run API
+
+### Local
 
 ```bash
 uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
 
-Or with Docker:
+### Docker
 
 ```bash
 docker build -t ancient-ner .
-docker run -p 8000:8000 ancient-ner
+
+docker run -p 8000:8000 \
+  -v /path/to/checkpoints:/app/checkpoints \
+  ancient-ner
 ```
 
-### Endpoints
+---
 
-**GET /health**
+## API Endpoints
+
+### `GET /health`
+
 ```json
-{"status": "ok", "model_loaded": true}
+{ "status": "ok", "model_loaded": true }
 ```
 
-**POST /predict**
+### `POST /predict`
 
-Request:
+**Request**
+
 ```json
 {
-  "sentences": "以其徃關上接領北朝頒賞勑諭銀幣故也。\n命胡士楊、阮名實、阮廷正等徃關上候命。"
+  "sentences": "命胡士楊、阮名實、阮廷正等徃關上候命。"
 }
 ```
 
-Response:
+**Response**
+
 ```json
 {
   "data": [
     {
-      "text": "以其徃關上接領北朝頒賞勑諭銀幣故也。",
-      "entities": []
-    },
-    {
       "text": "命胡士楊、阮名實、阮廷正等徃關上候命。",
       "entities": [
-        {"text": "胡士楊", "label": "PER", "start": 1, "end": 4},
-        {"text": "阮名實", "label": "PER", "start": 5, "end": 8},
-        {"text": "阮廷正", "label": "PER", "start": 9, "end": 12}
+        { "text": "胡士楊", "label": "PER", "start": 1, "end": 4 },
+        { "text": "阮名實", "label": "PER", "start": 5, "end": 8 },
+        { "text": "阮廷正", "label": "PER", "start": 9, "end": 12 }
       ]
     }
   ]
 }
 ```
 
-### Environment Variables
+---
 
-| Variable    | Default                                          | Description            |
-|-------------|--------------------------------------------------|------------------------|
-| `BACKBONE`  | `ethanyt/guwenbert-base`                         | HuggingFace model name |
-| `CKPT_PATH` | `outputs/ancient/guwenbert_crf/best.pt`          | Model checkpoint       |
-| `LABEL_MAP` | `outputs/ancient/guwenbert_crf/label_map.json`   | Label map JSON         |
-| `MAX_LEN`   | `128`                                            | Max token length       |
+## Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `BACKBONE` | `ethanyt/guwenbert-base` | HuggingFace model |
+| `CHECKPOINT_PATH` | `/app/checkpoints/best.pt` | Model weights path |
+| `LABEL_MAP_PATH` | `/app/artifacts/label_map.json` | Label mapping |
+| `MAX_LEN` | `128` | Max sequence length |
 
 ---
 
-## Training
+## Notes
 
-See `notebook45a88c3f07.ipynb` for full training pipeline.
+- `best.pt` must match `label_map.json`
+- Model weights are loaded from a mounted volume — not included in this repository
+- Repository contains only code and lightweight artifacts
