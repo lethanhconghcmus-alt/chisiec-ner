@@ -1,0 +1,47 @@
+# ─────────────────────────────────────────────────────────────────
+# Ancient Chinese NER — Config
+# ─────────────────────────────────────────────────────────────────
+project:
+  name: "ancient_chinese_ner"
+  seed: 42
+
+data:
+  train: "data/ancient/train.txt"
+  dev:   "data/ancient/dev.txt"
+  test:  "data/ancient/test.txt"
+  max_len: 128
+
+model:
+  method: "guwenbert_crf"   # guwenbert_crf | guwenbert_linear
+  backbone: null             # null = dùng default theo method
+  lstm_hidden: 256
+  lstm_layers: 2
+  kan_hidden: 512
+  kan_knots: 8
+  dropout: 0.1
+  pretrained_ckpt: null      # null = train từ đầu
+
+training:
+  epochs: 20
+  batch_size: 16
+  bert_lr: 1.0e-5
+  head_lr: 1.0e-3
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  grad_clip: 1.0
+  fp16: true
+
+early_stopping:
+  enabled: true
+  patience: 5
+  min_delta: 0.001
+
+checkpoint:
+  output_dir: "outputs/ancient"
+  save_top_k: 1
+
+logging:
+  level: "INFO"
+  use_wandb: false
+  wandb_project: "ancient-chinese-ner"
+  wandb_entity: null
