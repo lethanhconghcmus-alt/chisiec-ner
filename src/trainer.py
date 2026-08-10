@@ -90,11 +90,15 @@ class Trainer:
             if token_type_ids is not None:
                 token_type_ids = token_type_ids.to(self.device)
 
+            gaz_ids = batch.get("gaz_ids", None)
+            if gaz_ids is not None:
+                gaz_ids = gaz_ids.to(self.device)
+
             optimizer.zero_grad(set_to_none=True)
 
             if self.use_fp16:
                 with autocast():
-                    loss, _ = self.model(input_ids, attention_mask, token_type_ids, labels)
+                    loss, _ = self.model(input_ids, attention_mask, token_type_ids, labels, gaz_ids=gaz_ids)
 
                 self.scaler.scale(loss).backward()
                 self.scaler.unscale_(optimizer)
@@ -103,7 +107,7 @@ class Trainer:
                 self.scaler.step(optimizer)
                 self.scaler.update()
             else:
-                loss, _ = self.model(input_ids, attention_mask, token_type_ids, labels)
+                loss, _ = self.model(input_ids, attention_mask, token_type_ids, labels, gaz_ids=gaz_ids)
                 loss.backward()
                 nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.training.grad_clip)
                 optimizer.step()

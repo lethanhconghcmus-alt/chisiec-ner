@@ -11,6 +11,7 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import AutoTokenizer
 
 from src.utils import get_logger
+from src.gazetteer import GAZ_LABEL2ID
 
 logger = get_logger(__name__)
 
@@ -115,11 +116,12 @@ def build_label_map(train_data: list) -> tuple:
 # ── DATASET ───────────────────────────────────────────────────────────────────
 class NERDataset(Dataset):
 
-    def __init__(self, data, tokenizer, label2id, max_len=128):
-        self.data     = data
-        self.tok      = tokenizer
-        self.label2id = label2id
-        self.max_len  = max_len
+    def __init__(self, data, tokenizer, label2id, max_len=128, gaz_tagger=None):
+        self.data       = data
+        self.tok        = tokenizer
+        self.label2id   = label2id
+        self.max_len    = max_len
+        self.gaz_tagger = gaz_tagger
 
     def __len__(self):
         return len(self.data)
@@ -139,24 +141,36 @@ class NERDataset(Dataset):
         input_ids      = enc["input_ids"].squeeze()
         attention_mask = enc["attention_mask"].squeeze()
 
+        gaz_tags = self.gaz_tagger.tag(tokens) if self.gaz_tagger is not None else None
+
         label_ids = []
+        gaz_ids   = []
         prev_word = None
 
         for word_id in enc.word_ids():
             if word_id is None:
                 label_ids.append(-100)
+                gaz_ids.append(0)
             elif word_id != prev_word:
                 label_ids.append(self.label2id[labels[word_id]])
+                if gaz_tags is not None:
+                    gaz_ids.append(GAZ_LABEL2ID[gaz_tags[word_id]])
+                else:
+                    gaz_ids.append(0)
             else:
                 label_ids.append(-100)
+                gaz_ids.append(0)
             prev_word = word_id
 
-        return {
+        item = {
             "input_ids":      input_ids,
             "attention_mask": attention_mask,
             "token_type_ids": torch.zeros_like(input_ids),
             "labels":         torch.tensor(label_ids),
         }
+        if self.gaz_tagger is not None:
+            item["gaz_ids"] = torch.tensor(gaz_ids)
+        return item
 
 
 # ── DATALOADER FACTORY ────────────────────────────────────────────────────────
@@ -168,8 +182,9 @@ def make_dataloader(
     batch_size:  int,
     shuffle:     bool,
     num_workers: int = 0,
+    gaz_tagger=None,
 ) -> DataLoader:
-    dataset = NERDataset(data, tokenizer, label2id, max_len)
+    dataset = NERDataset(data, tokenizer, label2id, max_len, gaz_tagger=gaz_tagger)
     return DataLoader(
         dataset,
         batch_size=batch_size,

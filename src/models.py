@@ -42,17 +42,33 @@ def crf_step(crf, logits, attention_mask, labels=None):
 
 # ── MODEL 1: GuwenBERT + CRF ──────────────────────────────────────────────────
 class GuwenBertCRF(nn.Module):
-    def __init__(self, backbone: str, num_labels: int, dropout: float = 0.1):
+    def __init__(self, backbone: str, num_labels: int, dropout: float = 0.1,
+                 gaz_vocab_size: int = 0, gaz_dim: int = 16):
         super().__init__()
         self.bert = AutoModel.from_pretrained(backbone)
         hidden    = self.bert.config.hidden_size
         self.drop = nn.Dropout(dropout)
-        self.fc   = nn.Linear(hidden, num_labels)
-        self.crf  = CRF(num_labels, batch_first=True)
-        logger.info(f"GuwenBertCRF | backbone={backbone} | hidden={hidden} | labels={num_labels}")
 
-    def forward(self, input_ids, attention_mask, token_type_ids=None, labels=None):
-        seq    = self.drop(_bert_forward(self.bert, input_ids, attention_mask, token_type_ids))
+        self.use_gaz = gaz_vocab_size > 0
+        if self.use_gaz:
+            self.gaz_embed = nn.Embedding(gaz_vocab_size, gaz_dim, padding_idx=0)
+            fc_in = hidden + gaz_dim
+        else:
+            fc_in = hidden
+
+        self.fc  = nn.Linear(fc_in, num_labels)
+        self.crf = CRF(num_labels, batch_first=True)
+        logger.info(
+            f"GuwenBertCRF | backbone={backbone} | hidden={hidden} | labels={num_labels}"
+            + (f" | gaz_vocab={gaz_vocab_size} | gaz_dim={gaz_dim}" if self.use_gaz else "")
+        )
+
+    def forward(self, input_ids, attention_mask, token_type_ids=None, labels=None, gaz_ids=None):
+        seq = self.drop(_bert_forward(self.bert, input_ids, attention_mask, token_type_ids))
+        if self.use_gaz:
+            if gaz_ids is None:
+                gaz_ids = torch.zeros(seq.shape[:2], dtype=torch.long, device=seq.device)
+            seq = torch.cat([seq, self.gaz_embed(gaz_ids)], dim=-1)
         logits = self.fc(seq)
         return crf_step(self.crf, logits, attention_mask, labels)
 
@@ -68,7 +84,7 @@ class GuwenBertLinear(nn.Module):
         self.loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
         logger.info(f"GuwenBertLinear | backbone={backbone} | hidden={hidden} | labels={num_labels}")
 
-    def forward(self, input_ids, attention_mask, token_type_ids=None, labels=None):
+    def forward(self, input_ids, attention_mask, token_type_ids=None, labels=None, gaz_ids=None):
         seq    = self.drop(_bert_forward(self.bert, input_ids, attention_mask, token_type_ids))
         logits = self.fc(seq)
 
@@ -90,7 +106,10 @@ def build_model(cfg) -> nn.Module:
     n_labels = cfg._num_labels
 
     if method == "guwenbert_crf":
-        model = GuwenBertCRF(backbone, n_labels, cfg.model.dropout)
+        gaz_vocab_size = int(getattr(cfg.model, "gaz_vocab_size", 0) or 0)
+        gaz_dim        = int(getattr(cfg.model, "gaz_dim", 16) or 16)
+        model = GuwenBertCRF(backbone, n_labels, cfg.model.dropout,
+                              gaz_vocab_size=gaz_vocab_size, gaz_dim=gaz_dim)
 
     elif method == "guwenbert_linear":
         model = GuwenBertLinear(backbone, n_labels, cfg.model.dropout)

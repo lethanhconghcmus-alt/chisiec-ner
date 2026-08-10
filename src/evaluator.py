@@ -35,8 +35,11 @@ class Evaluator:
             attention_mask = batch["attention_mask"].to(self.device)
             token_type_ids = batch["token_type_ids"].to(self.device)
             labels         = batch["labels"]
+            gaz_ids        = batch.get("gaz_ids", None)
+            if gaz_ids is not None:
+                gaz_ids = gaz_ids.to(self.device)
 
-            preds = self.model(input_ids, attention_mask, token_type_ids)
+            preds = self.model(input_ids, attention_mask, token_type_ids, gaz_ids=gaz_ids)
 
             for pred_seq, label_seq, mask in zip(preds, labels, attention_mask):
                 true_tags, pred_tags = [], []
@@ -89,7 +92,10 @@ class Evaluator:
             attention_mask = batch["attention_mask"].to(self.device)
             token_type_ids = batch["token_type_ids"].to(self.device)
             labels         = batch["labels"]
-            preds          = self.model(input_ids, attention_mask, token_type_ids)
+            gaz_ids        = batch.get("gaz_ids", None)
+            if gaz_ids is not None:
+                gaz_ids = gaz_ids.to(self.device)
+            preds          = self.model(input_ids, attention_mask, token_type_ids, gaz_ids=gaz_ids)
 
             for pred_seq, label_seq, mask in zip(preds, labels, attention_mask):
                 true_tags, pred_tags = [], []
@@ -137,7 +143,10 @@ class Evaluator:
             attention_mask = batch["attention_mask"].to(self.device)
             token_type_ids = batch["token_type_ids"].to(self.device)
             labels         = batch["labels"]
-            preds          = self.model(input_ids, attention_mask, token_type_ids)
+            gaz_ids        = batch.get("gaz_ids", None)
+            if gaz_ids is not None:
+                gaz_ids = gaz_ids.to(self.device)
+            preds          = self.model(input_ids, attention_mask, token_type_ids, gaz_ids=gaz_ids)
 
             for pred_seq, label_seq, mask in zip(preds, labels, attention_mask):
                 for p, l, m in zip(pred_seq, label_seq.tolist(), mask.tolist()):

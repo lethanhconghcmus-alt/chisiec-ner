@@ -78,11 +78,20 @@ def main():
     backbone  = cfg.model.backbone or MODEL_BACKBONE[method]
     tokenizer = AutoTokenizer.from_pretrained(backbone)
 
+    # ── Gazetteer (feature phụ, tùy chọn) ────────────────────────────
+    gaz_tagger = None
+    if getattr(cfg, "gazetteer", None) and cfg.gazetteer.enabled:
+        from src.gazetteer import load_gazetteer, GazetteerTagger, GAZ_LABELS
+        surfaces   = load_gazetteer(cfg.gazetteer.dir)
+        gaz_tagger = GazetteerTagger(surfaces)
+        OmegaConf.update(cfg, "model.gaz_vocab_size", len(GAZ_LABELS))
+        logger.info(f"Gazetteer feature enabled: {len(GAZ_LABELS)} tags")
+
     bs = cfg.training.batch_size
     ml = cfg.data.max_len
-    train_loader = make_dataloader(train_data, tokenizer, label2id, ml, bs, shuffle=True)
-    dev_loader   = make_dataloader(dev_data,   tokenizer, label2id, ml, bs, shuffle=False)
-    test_loader  = make_dataloader(test_data,  tokenizer, label2id, ml, bs, shuffle=False)
+    train_loader = make_dataloader(train_data, tokenizer, label2id, ml, bs, shuffle=True,  gaz_tagger=gaz_tagger)
+    dev_loader   = make_dataloader(dev_data,   tokenizer, label2id, ml, bs, shuffle=False, gaz_tagger=gaz_tagger)
+    test_loader  = make_dataloader(test_data,  tokenizer, label2id, ml, bs, shuffle=False, gaz_tagger=gaz_tagger)
 
     # ── Model ─────────────────────────────────────────────────────
     OmegaConf.update(cfg, "_num_labels", len(label2id))
