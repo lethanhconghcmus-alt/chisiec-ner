@@ -1,0 +1,123 @@
+{
+  "false_positives_by_type": {
+    "PER": 1108,
+    "LOC": 352,
+    "OFI": 87
+  },
+  "false_negatives_by_type": {
+    "OFI": 1080,
+    "PER": 270,
+    "LOC": 596
+  },
+  "total_errors": 2827,
+  "error_samples": {
+    "OFI": [
+      {
+        "position": 2,
+        "true": "B-OFI",
+        "pred": "B-PER"
+      },
+      {
+        "position": 3,
+        "true": "I-OFI",
+        "pred": "I-PER"
+      },
+      {
+        "position": 4,
+        "true": "I-OFI",
+        "pred": "I-PER"
+      },
+      {
+        "position": 32,
+        "true": "B-OFI",
+        "pred": "O"
+      },
+      {
+        "position": 33,
+        "true": "I-OFI",
+        "pred": "O"
+      }
+    ],
+    "O": [
+      {
+        "position": 10,
+        "true": "O",
+        "pred": "B-PER"
+      },
+      {
+        "position": 17,
+        "true": "O",
+        "pred": "B-LOC"
+      },
+      {
+        "position": 18,
+        "true": "O",
+        "pred": "I-LOC"
+      },
+      {
+        "position": 41,
+        "true": "O",
+        "pred": "B-PER"
+      },
+      {
+        "position": 42,
+        "true": "O",
+        "pred": "I-PER"
+      }
+    ],
+    "PER": [
+      {
+        "position": 36,
+        "true": "I-PER",
+        "pred": "O"
+      },
+      {
+        "position": 37,
+        "true": "I-PER",
+        "pred": "O"
+      },
+      {
+        "position": 93,
+        "true": "I-PER",
+        "pred": "O"
+      },
+      {
+        "position": 3,
+        "true": "B-PER",
+        "pred": "I-PER"
+      },
+      {
+        "position": 47,
+        "true": "B-PER",
+        "pred": "B-LOC"
+      }
+    ],
+    "LOC": [
+      {
+        "position": 1,
+        "true": "B-LOC",
+        "pred": "O"
+      },
+      {
+        "position": 2,
+        "true": "I-LOC",
+        "pred": "O"
+      },
+      {
+        "position": 6,
+        "true": "B-LOC",
+        "pred": "O"
+      },
+      {
+        "position": 7,
+        "true": "I-LOC",
+        "pred": "O"
+      },
+      {
+        "position": 8,
+        "true": "I-LOC",
+        "pred": "O"
+      }
+    ]
+  }
+}
