@@ -79,19 +79,29 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(backbone)
 
     # ── Gazetteer (feature phụ, tùy chọn) ────────────────────────────
+    # multihot=True (mặc định): mỗi vị trí có nhiều cờ độc lập (TITLE/ORG/LOC/
+    # PER/DTM có thể cùng =1), không ép chọn 1 loại duy nhất khi mơ hồ -- xem
+    # src/gazetteer.py:tag_multihot. multihot=False: giữ hành vi cũ (1 nhãn
+    # categorical/vị trí, ưu tiên cứng theo thứ tự loại).
     gaz_tagger = None
+    gaz_multihot = False
     if getattr(cfg, "gazetteer", None) and cfg.gazetteer.enabled:
-        from src.gazetteer import load_gazetteer, GazetteerTagger, GAZ_LABELS
-        surfaces   = load_gazetteer(cfg.gazetteer.dir)
-        gaz_tagger = GazetteerTagger(surfaces)
-        OmegaConf.update(cfg, "model.gaz_vocab_size", len(GAZ_LABELS))
-        logger.info(f"Gazetteer feature enabled: {len(GAZ_LABELS)} tags")
+        from src.gazetteer import load_gazetteer, GazetteerTagger, GAZ_LABELS, GAZ_TYPES
+        surfaces     = load_gazetteer(cfg.gazetteer.dir)
+        gaz_tagger   = GazetteerTagger(surfaces)
+        gaz_multihot = bool(getattr(cfg.gazetteer, "multihot", True))
+        if gaz_multihot:
+            OmegaConf.update(cfg, "model.gaz_input_dim", len(GAZ_TYPES))
+            logger.info(f"Gazetteer feature enabled (multi-hot): {len(GAZ_TYPES)} cờ độc lập")
+        else:
+            OmegaConf.update(cfg, "model.gaz_vocab_size", len(GAZ_LABELS))
+            logger.info(f"Gazetteer feature enabled (categorical, legacy): {len(GAZ_LABELS)} tags")
 
     bs = cfg.training.batch_size
     ml = cfg.data.max_len
-    train_loader = make_dataloader(train_data, tokenizer, label2id, ml, bs, shuffle=True,  gaz_tagger=gaz_tagger)
-    dev_loader   = make_dataloader(dev_data,   tokenizer, label2id, ml, bs, shuffle=False, gaz_tagger=gaz_tagger)
-    test_loader  = make_dataloader(test_data,  tokenizer, label2id, ml, bs, shuffle=False, gaz_tagger=gaz_tagger)
+    train_loader = make_dataloader(train_data, tokenizer, label2id, ml, bs, shuffle=True,  gaz_tagger=gaz_tagger, gaz_multihot=gaz_multihot)
+    dev_loader   = make_dataloader(dev_data,   tokenizer, label2id, ml, bs, shuffle=False, gaz_tagger=gaz_tagger, gaz_multihot=gaz_multihot)
+    test_loader  = make_dataloader(test_data,  tokenizer, label2id, ml, bs, shuffle=False, gaz_tagger=gaz_tagger, gaz_multihot=gaz_multihot)
 
     # ── Model ─────────────────────────────────────────────────────
     OmegaConf.update(cfg, "_num_labels", len(label2id))

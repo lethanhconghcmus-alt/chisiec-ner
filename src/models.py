@@ -43,14 +43,23 @@ def crf_step(crf, logits, attention_mask, labels=None):
 # ── MODEL 1: GuwenBERT + CRF ──────────────────────────────────────────────────
 class GuwenBertCRF(nn.Module):
     def __init__(self, backbone: str, num_labels: int, dropout: float = 0.1,
-                 gaz_vocab_size: int = 0, gaz_dim: int = 16):
+                 gaz_vocab_size: int = 0, gaz_dim: int = 16, gaz_input_dim: int = 0):
+        """gaz_vocab_size > 0: gazetteer categorical cũ (1 nhãn/vị trí, nn.Embedding).
+        gaz_input_dim > 0: gazetteer multi-hot mới (nhiều cờ độc lập/vị trí,
+        nn.Linear) -- ưu tiên dùng khi cả hai cùng > 0."""
         super().__init__()
         self.bert = AutoModel.from_pretrained(backbone)
         hidden    = self.bert.config.hidden_size
         self.drop = nn.Dropout(dropout)
 
-        self.use_gaz = gaz_vocab_size > 0
-        if self.use_gaz:
+        self.use_gaz_multihot = gaz_input_dim > 0
+        self.use_gaz_categorical = (not self.use_gaz_multihot) and gaz_vocab_size > 0
+        self.use_gaz = self.use_gaz_multihot or self.use_gaz_categorical
+
+        if self.use_gaz_multihot:
+            self.gaz_proj = nn.Linear(gaz_input_dim, gaz_dim)
+            fc_in = hidden + gaz_dim
+        elif self.use_gaz_categorical:
             self.gaz_embed = nn.Embedding(gaz_vocab_size, gaz_dim, padding_idx=0)
             fc_in = hidden + gaz_dim
         else:
@@ -58,14 +67,23 @@ class GuwenBertCRF(nn.Module):
 
         self.fc  = nn.Linear(fc_in, num_labels)
         self.crf = CRF(num_labels, batch_first=True)
+        gaz_desc = ""
+        if self.use_gaz_multihot:
+            gaz_desc = f" | gaz_multihot_dim={gaz_input_dim} | gaz_dim={gaz_dim}"
+        elif self.use_gaz_categorical:
+            gaz_desc = f" | gaz_vocab={gaz_vocab_size} | gaz_dim={gaz_dim}"
         logger.info(
-            f"GuwenBertCRF | backbone={backbone} | hidden={hidden} | labels={num_labels}"
-            + (f" | gaz_vocab={gaz_vocab_size} | gaz_dim={gaz_dim}" if self.use_gaz else "")
+            f"GuwenBertCRF | backbone={backbone} | hidden={hidden} | labels={num_labels}{gaz_desc}"
         )
 
     def forward(self, input_ids, attention_mask, token_type_ids=None, labels=None, gaz_ids=None):
         seq = self.drop(_bert_forward(self.bert, input_ids, attention_mask, token_type_ids))
-        if self.use_gaz:
+        if self.use_gaz_multihot:
+            if gaz_ids is None:
+                gaz_ids = torch.zeros(*seq.shape[:2], self.gaz_proj.in_features,
+                                       dtype=torch.float, device=seq.device)
+            seq = torch.cat([seq, self.gaz_proj(gaz_ids)], dim=-1)
+        elif self.use_gaz_categorical:
             if gaz_ids is None:
                 gaz_ids = torch.zeros(seq.shape[:2], dtype=torch.long, device=seq.device)
             seq = torch.cat([seq, self.gaz_embed(gaz_ids)], dim=-1)
@@ -107,9 +125,11 @@ def build_model(cfg) -> nn.Module:
 
     if method == "guwenbert_crf":
         gaz_vocab_size = int(getattr(cfg.model, "gaz_vocab_size", 0) or 0)
+        gaz_input_dim  = int(getattr(cfg.model, "gaz_input_dim", 0) or 0)
         gaz_dim        = int(getattr(cfg.model, "gaz_dim", 16) or 16)
         model = GuwenBertCRF(backbone, n_labels, cfg.model.dropout,
-                              gaz_vocab_size=gaz_vocab_size, gaz_dim=gaz_dim)
+                              gaz_vocab_size=gaz_vocab_size, gaz_dim=gaz_dim,
+                              gaz_input_dim=gaz_input_dim)
 
     elif method == "guwenbert_linear":
         model = GuwenBertLinear(backbone, n_labels, cfg.model.dropout)

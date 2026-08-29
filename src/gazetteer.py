@@ -97,6 +97,45 @@ class GazetteerTagger:
     def _per_spans(self, text: str):
         return [(i, i + 1) for i, ch in enumerate(text) if ch in SURNAME_CHARS]
 
+    def tag_multihot(self, tokens: list):
+        """Trả về list[n][5] cờ nhị phân độc lập cho từng loại (thứ tự GAZ_TYPES
+        = TITLE, ORG, LOC, PER, DTM). KHÔNG ép chọn 1 loại duy nhất khi nhiều
+        loại cùng khớp 1 vị trí (khác với tag()) -- để CRF/encoder tự học cách
+        kết hợp các gợi ý này với ngữ cảnh câu, tránh thiên vị cứng theo thứ tự
+        kiểm tra (xem thảo luận ablation gazetteer trong paper)."""
+        n = len(tokens)
+        text = "".join(tokens)
+        flags = [[0] * len(GAZ_TYPES) for _ in range(n)]
+        idx = {t: k for k, t in enumerate(GAZ_TYPES)}
+
+        # rule-based: PER (loi) va DTM, doc lap voi lexicon va voi nhau
+        for s, e in self._per_spans(text):
+            for j in range(s, e):
+                flags[j][idx["PER"]] = 1
+        for s, e in self._dtm_spans(text):
+            for j in range(s, e):
+                flags[j][idx["DTM"]] = 1
+
+        # lexicon: TITLE/ORG/LOC, moi loai quet doc lap (longest-match noi bo
+        # loai do), khong chan lan nhau giua cac loai
+        for t in ("TITLE", "ORG", "LOC"):
+            i = 0
+            while i < n:
+                cap = min(self.max_len[t], n - i)
+                matched_len = 0
+                for length in range(cap, 0, -1):
+                    span = "".join(tokens[i:i + length])
+                    if span in self.surfaces[t]:
+                        matched_len = length
+                        break
+                if matched_len == 0:
+                    i += 1
+                    continue
+                for j in range(i, i + matched_len):
+                    flags[j][idx[t]] = 1
+                i += matched_len
+        return flags
+
     def tag(self, tokens: list) -> list:
         n = len(tokens)
         text = "".join(tokens)
