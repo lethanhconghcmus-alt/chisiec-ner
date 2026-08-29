@@ -97,28 +97,33 @@ class GazetteerTagger:
     def _per_spans(self, text: str):
         return [(i, i + 1) for i, ch in enumerate(text) if ch in SURNAME_CHARS]
 
-    def tag_multihot(self, tokens: list):
-        """Trả về list[n][5] cờ nhị phân độc lập cho từng loại (thứ tự GAZ_TYPES
-        = TITLE, ORG, LOC, PER, DTM). KHÔNG ép chọn 1 loại duy nhất khi nhiều
-        loại cùng khớp 1 vị trí (khác với tag()) -- để CRF/encoder tự học cách
-        kết hợp các gợi ý này với ngữ cảnh câu, tránh thiên vị cứng theo thứ tự
-        kiểm tra (xem thảo luận ablation gazetteer trong paper)."""
+    def tag_multihot(self, tokens: list, types: list = None):
+        """Trả về list[n][k] cờ nhị phân độc lập cho từng loại trong `types`
+        (mặc định = toàn bộ GAZ_TYPES = TITLE, ORG, LOC, PER, DTM; có thể thu
+        hẹp, VD types=["ORG","LOC"] để loại hẳn TITLE/PER/DTM ra khỏi feature).
+        KHÔNG ép chọn 1 loại duy nhất khi nhiều loại cùng khớp 1 vị trí (khác
+        với tag()) -- để CRF/encoder tự học cách kết hợp các gợi ý này với
+        ngữ cảnh câu, tránh thiên vị cứng theo thứ tự kiểm tra (xem thảo luận
+        ablation gazetteer trong paper)."""
+        types = list(types) if types else list(GAZ_TYPES)
         n = len(tokens)
         text = "".join(tokens)
-        flags = [[0] * len(GAZ_TYPES) for _ in range(n)]
-        idx = {t: k for k, t in enumerate(GAZ_TYPES)}
+        flags = [[0] * len(types) for _ in range(n)]
+        idx = {t: k for k, t in enumerate(types)}
 
         # rule-based: PER (loi) va DTM, doc lap voi lexicon va voi nhau
-        for s, e in self._per_spans(text):
-            for j in range(s, e):
-                flags[j][idx["PER"]] = 1
-        for s, e in self._dtm_spans(text):
-            for j in range(s, e):
-                flags[j][idx["DTM"]] = 1
+        if "PER" in idx:
+            for s, e in self._per_spans(text):
+                for j in range(s, e):
+                    flags[j][idx["PER"]] = 1
+        if "DTM" in idx:
+            for s, e in self._dtm_spans(text):
+                for j in range(s, e):
+                    flags[j][idx["DTM"]] = 1
 
         # lexicon: TITLE/ORG/LOC, moi loai quet doc lap (longest-match noi bo
         # loai do), khong chan lan nhau giua cac loai
-        for t in ("TITLE", "ORG", "LOC"):
+        for t in [t for t in ("TITLE", "ORG", "LOC") if t in idx]:
             i = 0
             while i < n:
                 cap = min(self.max_len[t], n - i)

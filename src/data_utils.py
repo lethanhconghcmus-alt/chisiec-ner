@@ -117,13 +117,14 @@ def build_label_map(train_data: list) -> tuple:
 class NERDataset(Dataset):
 
     def __init__(self, data, tokenizer, label2id, max_len=128, gaz_tagger=None,
-                 gaz_multihot=False):
+                 gaz_multihot=False, gaz_types=None):
         self.data       = data
         self.tok        = tokenizer
         self.label2id   = label2id
         self.max_len    = max_len
         self.gaz_tagger = gaz_tagger
         self.gaz_multihot = gaz_multihot
+        self.gaz_types  = list(gaz_types) if gaz_types else list(GAZ_TYPES)
 
     def __len__(self):
         return len(self.data)
@@ -146,11 +147,11 @@ class NERDataset(Dataset):
         if self.gaz_tagger is None:
             gaz_tags = None
         elif self.gaz_multihot:
-            gaz_tags = self.gaz_tagger.tag_multihot(tokens)
+            gaz_tags = self.gaz_tagger.tag_multihot(tokens, types=self.gaz_types)
         else:
             gaz_tags = self.gaz_tagger.tag(tokens)
 
-        n_gaz_dim = len(GAZ_TYPES) if self.gaz_multihot else None
+        n_gaz_dim = len(self.gaz_types) if self.gaz_multihot else None
         label_ids = []
         gaz_ids   = []
         prev_word = None
@@ -194,9 +195,10 @@ def make_dataloader(
     num_workers: int = 0,
     gaz_tagger=None,
     gaz_multihot=False,
+    gaz_types=None,
 ) -> DataLoader:
     dataset = NERDataset(data, tokenizer, label2id, max_len, gaz_tagger=gaz_tagger,
-                          gaz_multihot=gaz_multihot)
+                          gaz_multihot=gaz_multihot, gaz_types=gaz_types)
     return DataLoader(
         dataset,
         batch_size=batch_size,
