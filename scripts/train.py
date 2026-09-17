@@ -18,6 +18,7 @@ from src.models     import build_model, MODEL_BACKBONE
 from src.trainer    import Trainer
 from src.evaluator  import Evaluator
 from src.utils      import set_seed, get_logger, add_file_handler, save_json
+from src.bioes_utils import build_bioes_label_map, convert_dataset_bio_to_bioes
 
 logger = get_logger(__name__)
 
@@ -67,7 +68,30 @@ def main():
     validate_data(dev_data,   "dev")
     validate_data(test_data,  "test")
 
-    label2id, id2label = build_label_map(train_data)
+    # ── label_scheme (mục A) ─────────────────────────────────────────────
+    # Mặc định "bio" = hành vi gốc, KHÔNG đổi gì (M0 baseline). "bioes":
+    # convert data đọc được (đang ở BIO) sang BIOES trước khi build dataset
+    # -- dùng cho M1 (BIOES, vẫn model CRF cũ, không boundary heads) và bước
+    # tiền xử lý chung cho M2 (script riêng scripts/train_boundary.py).
+    label_scheme = str(getattr(cfg.data, "label_scheme", "bio") or "bio").lower()
+    bioes_mode   = str(getattr(cfg.data, "bioes_mode", "strict") or "strict").lower()
+    eval_scheme  = None
+
+    if label_scheme == "bioes":
+        train_data, train_conv_stats = convert_dataset_bio_to_bioes(train_data, mode=bioes_mode)
+        dev_data,   dev_conv_stats   = convert_dataset_bio_to_bioes(dev_data,   mode=bioes_mode)
+        test_data,  test_conv_stats  = convert_dataset_bio_to_bioes(test_data,  mode=bioes_mode)
+        save_json(
+            {"train": train_conv_stats, "dev": dev_conv_stats, "test": test_conv_stats},
+            os.path.join(output_dir, "bioes_conversion_report.json"),
+        )
+        label2id, id2label = build_bioes_label_map()
+        eval_scheme = "IOBES"
+    elif label_scheme == "bio":
+        label2id, id2label = build_label_map(train_data)
+    else:
+        raise ValueError(f"Unknown data.label_scheme: {label_scheme!r} (expect 'bio' or 'bioes')")
+
     save_json(
         {"label2id": label2id, "id2label": {str(i): l for i, l in id2label.items()}},
         os.path.join(output_dir, "label_map.json"),
@@ -115,7 +139,7 @@ def main():
     wandb_run = setup_wandb(cfg)
 
     # ── Train ─────────────────────────────────────────────────────
-    evaluator = Evaluator(model, id2label, device, output_dir)
+    evaluator = Evaluator(model, id2label, device, output_dir, scheme=eval_scheme)
     trainer   = Trainer(model, cfg, output_dir, wandb_run)
     train_res = trainer.train(train_loader, dev_loader, evaluator)
 
@@ -130,13 +154,18 @@ def main():
     evaluator.error_analysis(test_loader, test_data, split="test")
 
     # ── Save final results ────────────────────────────────────────
+    from src.utils import count_parameters
+    train_time = sum(h.get("elapsed", 0.0) for h in train_res.get("history", []))
     final = {
-        "method":      method,
-        "seed":        cfg.project.seed,
-        "backbone":    backbone,
+        "method":       method,
+        "seed":         cfg.project.seed,
+        "backbone":     backbone,
+        "label_scheme": label_scheme,
         **train_res,
-        "test_f1":     test_res["f1"],
-        "test_report": test_res["report"],
+        "test_f1":       test_res["f1"],
+        "test_report":   test_res["report"],
+        "total_params":  count_parameters(model),
+        "train_time":    round(train_time, 1),
     }
     save_json(final, os.path.join(output_dir, "results.json"))
     logger.info(f"\n✅ Done. Test F1 = {test_res['f1']:.4f}")

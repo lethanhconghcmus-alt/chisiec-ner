@@ -18,11 +18,23 @@ logger = get_logger(__name__)
 
 
 class Evaluator:
-    def __init__(self, model, id2label: dict, device: torch.device, output_dir: str):
+    def __init__(self, model, id2label: dict, device: torch.device, output_dir: str,
+                 scheme: str = None):
+        """
+        scheme: None (mặc định, GIỮ NGUYÊN hành vi cũ — BIO, không strict
+        IOBES) hoặc "IOBES" (dùng cho data ở scheme BIOES — M1: BIOES nhưng
+        vẫn model CRF cũ không boundary heads). Không truyền = không đổi gì
+        so với trước.
+        """
         self.model      = model
         self.id2label   = id2label
         self.device     = device
         self.output_dir = output_dir
+        self.scheme     = scheme
+        self._seqeval_kwargs = {}
+        if scheme == "IOBES":
+            from seqeval.scheme import IOBES
+            self._seqeval_kwargs = {"mode": "strict", "scheme": IOBES}
 
     # ── CORE EVALUATE ─────────────────────────────────────────────────────────
     @torch.no_grad()
@@ -51,11 +63,13 @@ class Evaluator:
                 all_labels.append(true_tags)
                 all_preds.append(pred_tags)
 
-        # BIO format — không dùng IOBES scheme
+        # scheme=None: BIO format, hành vi gốc. scheme="IOBES": strict
+        # entity-level (mode="strict", scheme=IOBES) — xem __init__.
         report = classification_report(
             all_labels, all_preds, output_dict=True, zero_division=0,
+            **self._seqeval_kwargs,
         )
-        f1 = f1_score(all_labels, all_preds, zero_division=0)
+        f1 = f1_score(all_labels, all_preds, zero_division=0, **self._seqeval_kwargs)
         return f1, report
 
     # ── DETAILED REPORT ───────────────────────────────────────────────────────

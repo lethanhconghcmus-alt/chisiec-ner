@@ -1,0 +1,56 @@
+# ─────────────────────────────────────────────────────────────────
+# M2 — backbone + CRF (BIOES) + start/end boundary heads (multi-task)
+# Dùng với scripts/train_boundary.py. M0/M1 dùng configs/config.yaml +
+# scripts/train.py (xem README.md mục "Ablation M0/M1/M2").
+# ─────────────────────────────────────────────────────────────────
+project:
+  name: "ancient_chinese_ner_boundary"
+  seed: 42
+
+data:
+  train: "data/ancient/train.txt"
+  dev:   "data/ancient/dev.txt"
+  test:  "data/ancient/test.txt"
+  max_len: 256
+  bioes_mode: "strict"   # "strict" (mặc định, raise nếu BIO gốc lỗi) | "repair"
+
+model:
+  method: "bert_crf_boundary"
+  backbone: null          # BẮT BUỘC set qua CLI, vd SIKU-BERT/sikubert | hsc748NLP/GujiRoBERTa_jian
+  dropout: 0.1
+  pretrained_ckpt: null
+
+  enable_boundary_auxiliary: true   # false = tắt boundary loss (total_loss = crf_loss), vẫn BIOES+CRF
+  boundary_weight: 0.1
+  boundary_loss_type: "weighted_bce"   # bce | weighted_bce | focal
+  boundary_pos_weight_max: 10.0        # clip cho weighted_bce
+  focal_alpha: 0.25
+  focal_gamma: 2.0
+
+training:
+  epochs: 20
+  batch_size: 16
+  encoder_lr: 1.0e-5
+  ner_head_lr: 1.0e-4
+  boundary_head_lr: 1.0e-4
+  crf_lr: 1.0e-4              # xem ghi chú trong trainer_boundary.py (gộp cùng nhóm ner_head_lr, giá trị luôn giống nhau theo mặc định)
+  weight_decay_encoder: 0.01
+  weight_decay_heads: 0.0
+  warmup_ratio: 0.1
+  grad_clip: 1.0
+  precision: "fp32"           # fp32 | fp16 | bf16 (tùy hardware — set fp16 trên Kaggle T4/P100 hỗ trợ)
+
+early_stopping:
+  enabled: true
+  patience: 5
+  min_delta: 0.001
+
+checkpoint:
+  output_dir: "outputs/ancient_boundary"
+  save_top_k: 1
+
+logging:
+  level: "INFO"
+  use_wandb: false
+  wandb_project: "ancient-chinese-ner"
+  wandb_entity: null

@@ -12,6 +12,7 @@ from transformers import AutoTokenizer
 
 from src.utils import get_logger
 from src.gazetteer import GAZ_LABEL2ID, GAZ_TYPES
+from src.bioes_utils import derive_boundary_labels
 
 logger = get_logger(__name__)
 
@@ -117,7 +118,18 @@ def build_label_map(train_data: list) -> tuple:
 class NERDataset(Dataset):
 
     def __init__(self, data, tokenizer, label2id, max_len=128, gaz_tagger=None,
-                 gaz_multihot=False, gaz_types=None):
+                 gaz_multihot=False, gaz_types=None, derive_boundary=False):
+        """
+        derive_boundary: nếu True, `data`'s labels PHẢI đã ở scheme BIOES
+        (xem src/bioes_utils.py:convert_dataset_bio_to_bioes — gọi TRƯỚC khi
+        tạo Dataset, không phải trách nhiệm của Dataset). Khi đó mỗi item sẽ
+        có thêm "start_labels"/"end_labels": nhãn nhị phân được suy ra từ
+        BIOES tag GỐC theo từng token (word-level) TRƯỚC KHI pad/align vào
+        subword — sau đó align vào đúng subword đầu tiên của mỗi từ giống
+        hệt cách "labels" (ner) được align, để 2 loại nhãn nhất quán vị trí
+        với nhau. Token không được đánh giá (CLS/SEP/pad/subword tiếp theo)
+        nhận -100, giống hệt "labels".
+        """
         self.data       = data
         self.tok        = tokenizer
         self.label2id   = label2id
@@ -125,6 +137,7 @@ class NERDataset(Dataset):
         self.gaz_tagger = gaz_tagger
         self.gaz_multihot = gaz_multihot
         self.gaz_types  = list(gaz_types) if gaz_types else list(GAZ_TYPES)
+        self.derive_boundary = derive_boundary
 
     def __len__(self):
         return len(self.data)
@@ -156,10 +169,18 @@ class NERDataset(Dataset):
         gaz_ids   = []
         prev_word = None
 
+        start_word, end_word = (
+            derive_boundary_labels(labels) if self.derive_boundary else (None, None)
+        )
+        start_ids, end_ids = [], []
+
         for word_id in enc.word_ids():
             if word_id is None:
                 label_ids.append(-100)
                 gaz_ids.append([0] * n_gaz_dim if self.gaz_multihot else 0)
+                if self.derive_boundary:
+                    start_ids.append(-100)
+                    end_ids.append(-100)
             elif word_id != prev_word:
                 label_ids.append(self.label2id[labels[word_id]])
                 if gaz_tags is not None:
@@ -167,9 +188,15 @@ class NERDataset(Dataset):
                                    else GAZ_LABEL2ID[gaz_tags[word_id]])
                 else:
                     gaz_ids.append([0] * n_gaz_dim if self.gaz_multihot else 0)
+                if self.derive_boundary:
+                    start_ids.append(start_word[word_id])
+                    end_ids.append(end_word[word_id])
             else:
                 label_ids.append(-100)
                 gaz_ids.append([0] * n_gaz_dim if self.gaz_multihot else 0)
+                if self.derive_boundary:
+                    start_ids.append(-100)
+                    end_ids.append(-100)
             prev_word = word_id
 
         item = {
@@ -181,6 +208,9 @@ class NERDataset(Dataset):
         if self.gaz_tagger is not None:
             dtype = torch.float if self.gaz_multihot else torch.long
             item["gaz_ids"] = torch.tensor(gaz_ids, dtype=dtype)
+        if self.derive_boundary:
+            item["start_labels"] = torch.tensor(start_ids, dtype=torch.long)
+            item["end_labels"]   = torch.tensor(end_ids, dtype=torch.long)
         return item
 
 
@@ -196,9 +226,11 @@ def make_dataloader(
     gaz_tagger=None,
     gaz_multihot=False,
     gaz_types=None,
+    derive_boundary=False,
 ) -> DataLoader:
     dataset = NERDataset(data, tokenizer, label2id, max_len, gaz_tagger=gaz_tagger,
-                          gaz_multihot=gaz_multihot, gaz_types=gaz_types)
+                          gaz_multihot=gaz_multihot, gaz_types=gaz_types,
+                          derive_boundary=derive_boundary)
     return DataLoader(
         dataset,
         batch_size=batch_size,
