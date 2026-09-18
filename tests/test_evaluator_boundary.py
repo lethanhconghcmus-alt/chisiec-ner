@@ -92,6 +92,53 @@ def _build_tiny_trained_model_and_loader():
     return model, id2label, eval_loader, data
 
 
+def test_boundary_evaluator_zero_invalid_repairs_with_constrained_transitions():
+    """
+    Xác nhận đúng phát hiện 402/2518 invalid BIOES decode trên Kaggle (kernel
+    dvsktt-sikubert-crf-boundary-m2, model KHÔNG constrain) đã được sửa: với
+    constrain_bioes_transitions=True (mặc định), CRF không thể decode ra
+    chuỗi invalid -> num_bioes_repairs PHẢI = 0, kể cả với model gần như
+    chưa train (1 bước gradient, random-ish) -- vì đây là ràng buộc CỨNG ở
+    tầng Viterbi/transitions, không phụ thuộc chất lượng học.
+    """
+    torch.manual_seed(1)
+    label2id, id2label = build_bioes_label_map()
+    tokenizer = AutoTokenizer.from_pretrained(TINY_BACKBONE)
+    data = [
+        (list("太師陳守度至化州"),
+         ["B-TITLE", "E-TITLE", "B-PER", "I-PER", "E-PER", "O", "B-LOC", "E-LOC"]),
+        (list("以黄義膠為督視"),
+         ["O", "B-PER", "I-PER", "E-PER", "O", "B-TITLE", "E-TITLE"]),
+        (list("鄭根赴京畿"),
+         ["B-PER", "I-PER", "O", "B-LOC", "E-LOC"]),
+    ] * 8
+    ds = NERDataset(data, tokenizer, label2id, max_len=16, derive_boundary=True)
+    loader = torch.utils.data.DataLoader(ds, batch_size=4, shuffle=True)
+    eval_loader = torch.utils.data.DataLoader(ds, batch_size=4, shuffle=False)
+
+    model = BertCRFBoundaryNER(
+        TINY_BACKBONE, num_labels=len(label2id), o_label_id=label2id["O"],
+        label2id=label2id, constrain_bioes_transitions=True,
+    )
+    assert model.constrain_bioes_transitions is True
+
+    optimizer = torch.optim.AdamW(model.parameters(), lr=5e-4)
+    model.train()
+    for _ in range(3):  # rất ít bước train -- cố tình để model còn "ngu"
+        for batch in loader:
+            optimizer.zero_grad()
+            out = model(batch["input_ids"], batch["attention_mask"], batch["token_type_ids"],
+                        ner_labels=batch["labels"], start_labels=batch["start_labels"],
+                        end_labels=batch["end_labels"])
+            out.loss.backward()
+            optimizer.step()
+            model.apply_transition_constraints()  # giống trainer_boundary.py
+
+    evaluator = BoundaryEvaluator(model, id2label, torch.device("cpu"), output_dir=".")
+    metrics = evaluator.evaluate(eval_loader)
+    assert metrics["num_bioes_repairs"] == 0
+
+
 def test_boundary_evaluator_evaluate_returns_valid_metrics():
     model, id2label, loader, _ = _build_tiny_trained_model_and_loader()
     evaluator = BoundaryEvaluator(model, id2label, torch.device("cpu"), output_dir=".")

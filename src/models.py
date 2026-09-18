@@ -20,6 +20,7 @@ from typing import Optional
 from transformers import AutoModel
 from torchcrf import CRF
 from src.utils import get_logger
+from src.bioes_utils import apply_hard_transition_constraints, build_bioes_transition_masks
 
 logger = get_logger(__name__)
 
@@ -205,6 +206,9 @@ class BertCRFBoundaryNER(nn.Module):
         end_pos_weight: Optional[float] = None,
         focal_alpha: float = 0.25,
         focal_gamma: float = 2.0,
+        label2id: Optional[dict] = None,
+        constrain_bioes_transitions: bool = True,
+        transition_constraint_penalty: float = -100000.0,
     ):
         super().__init__()
         if boundary_loss_type not in ("bce", "weighted_bce", "focal"):
@@ -230,11 +234,42 @@ class BertCRFBoundaryNER(nn.Module):
         self.start_pos_weight = start_pos_weight
         self.end_pos_weight = end_pos_weight
 
+        # ── Hard-constrained CRF transitions (BIOES state machine) ────────
+        # torchcrf không tự enforce constraint -- xem docstring
+        # src/bioes_utils.py:apply_hard_transition_constraints. Cần
+        # label2id để biết nhãn nào ứng với index nào trong ma trận
+        # transitions[num_labels, num_labels]. constrain_bioes_transitions=
+        # False (hoặc label2id=None) -> tắt hẳn, giữ hành vi CRF gốc
+        # (torchcrf tự học transition, có thể decode ra chuỗi invalid).
+        self.constrain_bioes_transitions = constrain_bioes_transitions and (label2id is not None)
+        if self.constrain_bioes_transitions:
+            illegal_t, illegal_s, illegal_e = build_bioes_transition_masks(label2id)
+            self.register_buffer("_illegal_transition", illegal_t)
+            self.register_buffer("_illegal_start", illegal_s)
+            self.register_buffer("_illegal_end", illegal_e)
+            self.transition_constraint_penalty = transition_constraint_penalty
+            self.apply_transition_constraints()
+        else:
+            self._illegal_transition = None
+
         logger.info(
             f"BertCRFBoundaryNER | backbone={backbone} | hidden={hidden} | "
             f"labels={num_labels} | o_label_id={o_label_id} | "
             f"enable_boundary_auxiliary={enable_boundary_auxiliary} | "
-            f"boundary_weight={boundary_weight} | boundary_loss_type={boundary_loss_type}"
+            f"boundary_weight={boundary_weight} | boundary_loss_type={boundary_loss_type} | "
+            f"constrain_bioes_transitions={self.constrain_bioes_transitions}"
+        )
+
+    def apply_transition_constraints(self):
+        """Gọi lại sau MỖI optimizer.step() (xem trainer_boundary.py) để CRF
+        transitions không bao giờ "trôi" khỏi ràng buộc BIOES hợp lệ, dù
+        gradient của NLL loss có thể nhích nhẹ các ô bị cấm lên sau mỗi
+        bước cập nhật. No-op nếu constrain_bioes_transitions=False."""
+        if not self.constrain_bioes_transitions:
+            return
+        apply_hard_transition_constraints(
+            self.crf, self._illegal_transition, self._illegal_start,
+            self._illegal_end, penalty=self.transition_constraint_penalty,
         )
 
     def _boundary_loss(self, logits: torch.Tensor, target_labels: torch.Tensor,
@@ -318,8 +353,11 @@ class BertCRFBoundaryNER(nn.Module):
 
 
 # ── FACTORY ───────────────────────────────────────────────────────────────────
-def build_model(cfg) -> nn.Module:
-    """Build model từ OmegaConf config."""
+def build_model(cfg, label2id: Optional[dict] = None) -> nn.Module:
+    """Build model từ OmegaConf config. label2id: CHỈ cần cho
+    method=bert_crf_boundary (để bake hard transition constraint BIOES —
+    xem BertCRFBoundaryNER); None ở mọi call site khác (guwenbert_crf/
+    guwenbert_linear không dùng, giữ nguyên hành vi cũ)."""
     method   = cfg.model.method
     backbone = cfg.model.backbone or MODEL_BACKBONE.get(method)
     if backbone is None:
@@ -356,6 +394,8 @@ def build_model(cfg) -> nn.Module:
             end_pos_weight=getattr(cfg, "_end_pos_weight", None),
             focal_alpha=float(getattr(mcfg, "focal_alpha", 0.25)),
             focal_gamma=float(getattr(mcfg, "focal_gamma", 2.0)),
+            label2id=label2id,
+            constrain_bioes_transitions=bool(getattr(mcfg, "constrain_bioes_transitions", True)),
         )
 
     else:

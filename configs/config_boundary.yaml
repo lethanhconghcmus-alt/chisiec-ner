@@ -21,6 +21,7 @@ model:
   pretrained_ckpt: null
 
   enable_boundary_auxiliary: true   # false = tắt boundary loss (total_loss = crf_loss), vẫn BIOES+CRF
+  constrain_bioes_transitions: true # true = khoá cứng các cặp nhãn BIOES bất hợp lệ trong CRF transitions (xem bioes_utils.py)
   boundary_weight: 0.1
   boundary_loss_type: "weighted_bce"   # bce | weighted_bce | focal
   boundary_pos_weight_max: 10.0        # clip cho weighted_bce

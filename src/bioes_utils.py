@@ -24,6 +24,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
+import torch
+
 from src.utils import get_logger
 
 logger = get_logger(__name__)
@@ -392,3 +394,92 @@ class BoundaryErrorCounts:
     wrong_type_exact_boundary: int = 0
     missed_entity: int = 0
     spurious_entity: int = 0
+
+
+# ── HARD-CONSTRAINED CRF TRANSITIONS (BIOES state machine) ─────────────────
+# Bối cảnh: torchcrf.CRF KHÔNG enforce hard transition constraint -- toàn bộ
+# 21x21 cặp nhãn đều được phép về mặt thuật toán Viterbi, chỉ bị "khuyên can"
+# gián tiếp qua giá trị học được của transitions[i,j]. Với train nhỏ (1,277
+# câu) + 21 nhãn BIOES, nhiều cặp bất hợp lệ (O->I-X, B-X->O, B-X->E-Y khác
+# loại, ...) không đủ dữ liệu phản ví dụ để model tự học tránh -> observed
+# 402/2518 lần CRF decode ra chuỗi invalid trên test set M2 (repair() phải
+# sửa). Cách sửa đúng: bake hard constraint trực tiếp vào transitions/
+# start_transitions/end_transitions của torchcrf bằng cách gán 1 penalty rất
+# âm cho MỌI cặp bất hợp lệ, làm lại sau MỖI optimizer.step() (vì AdamW vẫn
+# có thể nhích các phần tử đó lên 1 chút do gradient len qua đường đi khác
+# trong partition function) -- kỹ thuật "projected/masked constrained CRF"
+# tiêu chuẩn khi không sửa lại thuật toán Viterbi của thư viện.
+def _prefix_type(tag: str):
+    if tag == "O":
+        return "O", None
+    prefix, etype = tag.split("-", 1)
+    return prefix, etype
+
+
+def bioes_legal_transition(prev_tag: str, next_tag: str) -> bool:
+    """O/E-X/S-X (kết thúc 1 "cụm") chỉ được theo sau bởi O/B-Y/S-Y (bắt đầu
+    cụm mới hoặc không có gì). B-X/I-X (đang mở cụm loại X) chỉ được theo
+    sau bởi I-X/E-X (tiếp tục ĐÚNG loại X)."""
+    p_prefix, p_type = _prefix_type(prev_tag)
+    n_prefix, n_type = _prefix_type(next_tag)
+    if p_prefix in ("O", "E", "S"):
+        return n_prefix in ("O", "B", "S")
+    if p_prefix in ("B", "I"):
+        return n_prefix in ("I", "E") and n_type == p_type
+    raise ValueError(f"Unrecognized tag prefix in '{prev_tag}'")
+
+
+def bioes_legal_start(tag: str) -> bool:
+    prefix, _ = _prefix_type(tag)
+    return prefix in ("O", "B", "S")
+
+
+def bioes_legal_end(tag: str) -> bool:
+    prefix, _ = _prefix_type(tag)
+    return prefix in ("O", "E", "S")
+
+
+def build_bioes_transition_masks(label2id: dict) -> tuple:
+    """
+    Trả về (illegal_transition, illegal_start, illegal_end) — BoolTensor,
+    True tại vị trí BỊ CẤM. illegal_transition[i, j] = True nếu chuyển từ
+    nhãn i sang nhãn j vi phạm state machine BIOES (mục "Không được có" ở
+    yêu cầu). Dùng với apply_hard_transition_constraints() để bake vào
+    torchcrf.CRF.
+    """
+    n = len(label2id)
+    id2label = {v: k for k, v in label2id.items()}
+    illegal_transition = torch.ones(n, n, dtype=torch.bool)
+    illegal_start = torch.ones(n, dtype=torch.bool)
+    illegal_end = torch.ones(n, dtype=torch.bool)
+
+    for i in range(n):
+        ti = id2label[i]
+        if bioes_legal_start(ti):
+            illegal_start[i] = False
+        if bioes_legal_end(ti):
+            illegal_end[i] = False
+        for j in range(n):
+            tj = id2label[j]
+            if bioes_legal_transition(ti, tj):
+                illegal_transition[i, j] = False
+
+    return illegal_transition, illegal_start, illegal_end
+
+
+def apply_hard_transition_constraints(
+    crf, illegal_transition: torch.Tensor, illegal_start: torch.Tensor,
+    illegal_end: torch.Tensor, penalty: float = -100000.0,
+) -> None:
+    """
+    Ghi đè in-place transitions/start_transitions/end_transitions của
+    torchcrf.CRF: mọi cặp/vị trí bị cấm -> `penalty` (một số rất âm, đủ để
+    Viterbi không bao giờ chọn dù emission score có lớn cỡ nào trong thực
+    tế). PHẢI gọi lại hàm này sau MỖI optimizer.step() (xem
+    src/trainer_boundary.py) để giữ ràng buộc trong suốt quá trình train,
+    không chỉ lúc khởi tạo.
+    """
+    with torch.no_grad():
+        crf.transitions.masked_fill_(illegal_transition.to(crf.transitions.device), penalty)
+        crf.start_transitions.masked_fill_(illegal_start.to(crf.start_transitions.device), penalty)
+        crf.end_transitions.masked_fill_(illegal_end.to(crf.end_transitions.device), penalty)

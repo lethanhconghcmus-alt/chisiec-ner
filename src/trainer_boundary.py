@@ -139,6 +139,12 @@ class BoundaryTrainer:
                 nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.training.grad_clip)
                 optimizer.step()
 
+            # Re-bake hard BIOES transition constraint sau MỖI optimizer step
+            # (no-op nếu model.constrain_bioes_transitions=False) -- xem
+            # src/bioes_utils.py:apply_hard_transition_constraints.
+            if hasattr(self.model, "apply_transition_constraints"):
+                self.model.apply_transition_constraints()
+
             scheduler.step()
 
             sums["total"] += float(loss.item())

@@ -131,7 +131,7 @@ def main():
     with open(os.path.join(output_dir, "full_config.yaml"), "w", encoding="utf-8") as f:
         f.write(OmegaConf.to_yaml(cfg))
 
-    model  = build_model(cfg)
+    model  = build_model(cfg, label2id=label2id)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     wandb_run = setup_wandb(cfg)
