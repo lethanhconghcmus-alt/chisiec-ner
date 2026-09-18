@@ -469,15 +469,29 @@ def build_bioes_transition_masks(label2id: dict) -> tuple:
 
 def apply_hard_transition_constraints(
     crf, illegal_transition: torch.Tensor, illegal_start: torch.Tensor,
-    illegal_end: torch.Tensor, penalty: float = -100000.0,
+    illegal_end: torch.Tensor, penalty: float = float("-inf"),
 ) -> None:
     """
     Ghi đè in-place transitions/start_transitions/end_transitions của
-    torchcrf.CRF: mọi cặp/vị trí bị cấm -> `penalty` (một số rất âm, đủ để
-    Viterbi không bao giờ chọn dù emission score có lớn cỡ nào trong thực
-    tế). PHẢI gọi lại hàm này sau MỖI optimizer.step() (xem
-    src/trainer_boundary.py) để giữ ràng buộc trong suốt quá trình train,
-    không chỉ lúc khởi tạo.
+    torchcrf.CRF: mọi cặp/vị trí bị cấm -> `penalty`. PHẢI gọi lại hàm này
+    sau MỖI optimizer.step() (xem src/trainer_boundary.py) để giữ ràng buộc
+    trong suốt quá trình train, không chỉ lúc khởi tạo.
+
+    **Vì sao mặc định `-inf` chứ không phải 1 số âm hữu hạn (vd -100000)**:
+    một hằng số âm hữu hạn KHÔNG phải hard constraint thật — với emission
+    score đủ lớn (kể cả không thực tế, ví dụ do lỗi khởi tạo hoặc
+    adversarial input), tổng điểm của đường đi bất hợp lệ vẫn có thể vượt
+    đường đi hợp lệ tốt nhất (unit test
+    `test_viterbi_never_starts_with_I_or_E_even_with_adversarial_emissions`
+    phát hiện chính xác lỗ hổng này với penalty=-100000 và emission=1e6).
+    `-inf` loại bỏ hoàn toàn lỗ hổng: `torch.max` (dùng trong Viterbi decode
+    của torchcrf) luôn bỏ qua nhánh `-inf` trừ khi MỌI nhánh đều `-inf`
+    (không xảy ra vì luôn có ít nhất 1 đường hợp lệ). Không gây NaN ở decode
+    (chỉ dùng max/argmax). Ở training (NLL loss dùng logsumexp qua
+    `_compute_normalizer`), `exp(-inf) = 0` nên các đường bất hợp lệ đóng
+    góp đúng 0 vào partition function — an toàn cả dưới fp16 autocast vì
+    `-inf` là giá trị hợp lệ của IEEE754 (không bị tràn số như 1 hằng số âm
+    hữu hạn có |giá trị| > 65504, giới hạn fp16).
     """
     with torch.no_grad():
         crf.transitions.masked_fill_(illegal_transition.to(crf.transitions.device), penalty)

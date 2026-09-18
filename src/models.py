@@ -208,7 +208,7 @@ class BertCRFBoundaryNER(nn.Module):
         focal_gamma: float = 2.0,
         label2id: Optional[dict] = None,
         constrain_bioes_transitions: bool = True,
-        transition_constraint_penalty: float = -100000.0,
+        transition_constraint_penalty: float = float("-inf"),
     ):
         super().__init__()
         if boundary_loss_type not in ("bce", "weighted_bce", "focal"):
