@@ -12,7 +12,7 @@ from transformers import AutoTokenizer
 
 from src.utils import get_logger
 from src.gazetteer import GAZ_LABEL2ID, GAZ_TYPES
-from src.bioes_utils import derive_boundary_labels
+from src.bioes_utils import derive_boundary_labels, derive_boundary_labels_from_bio
 
 logger = get_logger(__name__)
 
@@ -118,18 +118,25 @@ def build_label_map(train_data: list) -> tuple:
 class NERDataset(Dataset):
 
     def __init__(self, data, tokenizer, label2id, max_len=128, gaz_tagger=None,
-                 gaz_multihot=False, gaz_types=None, derive_boundary=False):
+                 gaz_multihot=False, gaz_types=None, derive_boundary=False,
+                 boundary_scheme="bioes"):
         """
-        derive_boundary: nếu True, `data`'s labels PHẢI đã ở scheme BIOES
-        (xem src/bioes_utils.py:convert_dataset_bio_to_bioes — gọi TRƯỚC khi
-        tạo Dataset, không phải trách nhiệm của Dataset). Khi đó mỗi item sẽ
-        có thêm "start_labels"/"end_labels": nhãn nhị phân được suy ra từ
-        BIOES tag GỐC theo từng token (word-level) TRƯỚC KHI pad/align vào
-        subword — sau đó align vào đúng subword đầu tiên của mỗi từ giống
-        hệt cách "labels" (ner) được align, để 2 loại nhãn nhất quán vị trí
-        với nhau. Token không được đánh giá (CLS/SEP/pad/subword tiếp theo)
-        nhận -100, giống hệt "labels".
+        derive_boundary: nếu True, mỗi item sẽ có thêm "start_labels"/
+        "end_labels": nhãn nhị phân suy từ nhãn GỐC theo từng token
+        (word-level) TRƯỚC KHI pad/align vào subword — sau đó align vào
+        đúng subword đầu tiên của mỗi từ giống hệt cách "labels" (ner) được
+        align, để 2 loại nhãn nhất quán vị trí với nhau. Token không được
+        đánh giá (CLS/SEP/pad/subword tiếp theo) nhận -100, giống hệt
+        "labels".
+        boundary_scheme: "bioes" (mặc định — `data`'s labels PHẢI đã ở
+        scheme BIOES, xem src/bioes_utils.py:convert_dataset_bio_to_bioes,
+        gọi TRƯỚC khi tạo Dataset) hoặc "bio" (M3 — `data`'s labels vẫn ở
+        BIO gốc, KHÔNG convert, boundary suy trực tiếp qua
+        derive_boundary_labels_from_bio — dùng khi muốn test boundary heads
+        mà không đổi label space 11->21, xem [[dvsktt-bioes-boundary-heads]]).
         """
+        if boundary_scheme not in ("bio", "bioes"):
+            raise ValueError(f"Unknown boundary_scheme: {boundary_scheme!r}")
         self.data       = data
         self.tok        = tokenizer
         self.label2id   = label2id
@@ -138,6 +145,7 @@ class NERDataset(Dataset):
         self.gaz_multihot = gaz_multihot
         self.gaz_types  = list(gaz_types) if gaz_types else list(GAZ_TYPES)
         self.derive_boundary = derive_boundary
+        self.boundary_scheme = boundary_scheme
 
     def __len__(self):
         return len(self.data)
@@ -169,9 +177,12 @@ class NERDataset(Dataset):
         gaz_ids   = []
         prev_word = None
 
-        start_word, end_word = (
-            derive_boundary_labels(labels) if self.derive_boundary else (None, None)
-        )
+        if not self.derive_boundary:
+            start_word, end_word = None, None
+        elif self.boundary_scheme == "bio":
+            start_word, end_word = derive_boundary_labels_from_bio(labels)
+        else:
+            start_word, end_word = derive_boundary_labels(labels)
         start_ids, end_ids = [], []
 
         for word_id in enc.word_ids():
@@ -227,10 +238,11 @@ def make_dataloader(
     gaz_multihot=False,
     gaz_types=None,
     derive_boundary=False,
+    boundary_scheme="bioes",
 ) -> DataLoader:
     dataset = NERDataset(data, tokenizer, label2id, max_len, gaz_tagger=gaz_tagger,
                           gaz_multihot=gaz_multihot, gaz_types=gaz_types,
-                          derive_boundary=derive_boundary)
+                          derive_boundary=derive_boundary, boundary_scheme=boundary_scheme)
     return DataLoader(
         dataset,
         batch_size=batch_size,

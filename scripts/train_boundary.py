@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from omegaconf import OmegaConf
 import torch
 
-from src.data_utils import read_conll, make_dataloader, validate_data
+from src.data_utils import read_conll, make_dataloader, validate_data, build_label_map
 from src.models import build_model
 from src.trainer_boundary import BoundaryTrainer
 from src.evaluator_boundary import BoundaryEvaluator
@@ -78,7 +78,7 @@ def main():
 
     set_seed(cfg.project.seed)
 
-    # ── Data: đọc BIO, validate, convert -> BIOES (mục A) ────────────────
+    # ── Data: đọc BIO, validate ────────────────────────────────────────────
     train_data = read_conll(cfg.data.train)
     dev_data   = read_conll(cfg.data.dev)
     test_data  = read_conll(cfg.data.test)
@@ -87,16 +87,26 @@ def main():
     validate_data(dev_data,   "dev")
     validate_data(test_data,  "test")
 
-    bioes_mode = str(getattr(cfg.data, "bioes_mode", "strict") or "strict").lower()
-    train_data, train_conv = convert_dataset_bio_to_bioes(train_data, mode=bioes_mode)
-    dev_data,   dev_conv   = convert_dataset_bio_to_bioes(dev_data,   mode=bioes_mode)
-    test_data,  test_conv  = convert_dataset_bio_to_bioes(test_data,  mode=bioes_mode)
-    save_json(
-        {"train": train_conv, "dev": dev_conv, "test": test_conv},
-        os.path.join(output_dir, "bioes_conversion_report.json"),
-    )
+    # label_scheme: "bioes" (mặc định, M2 — convert BIO->BIOES, 21 nhãn) hoặc
+    # "bio" (M3 — GIỮ NGUYÊN BIO gốc, 11 nhãn, boundary suy trực tiếp từ BIO,
+    # không đổi label space -- xem [[dvsktt-bioes-boundary-heads]]).
+    label_scheme = str(getattr(cfg.data, "label_scheme", "bioes") or "bioes").lower()
+    if label_scheme not in ("bio", "bioes"):
+        raise ValueError(f"Unknown data.label_scheme: {label_scheme!r}")
 
-    label2id, id2label = build_bioes_label_map()
+    if label_scheme == "bioes":
+        bioes_mode = str(getattr(cfg.data, "bioes_mode", "strict") or "strict").lower()
+        train_data, train_conv = convert_dataset_bio_to_bioes(train_data, mode=bioes_mode)
+        dev_data,   dev_conv   = convert_dataset_bio_to_bioes(dev_data,   mode=bioes_mode)
+        test_data,  test_conv  = convert_dataset_bio_to_bioes(test_data,  mode=bioes_mode)
+        save_json(
+            {"train": train_conv, "dev": dev_conv, "test": test_conv},
+            os.path.join(output_dir, "bioes_conversion_report.json"),
+        )
+        label2id, id2label = build_bioes_label_map()
+    else:
+        label2id, id2label = build_label_map(train_data)
+
     save_json(
         {"label2id": label2id, "id2label": {str(i): l for i, l in id2label.items()}},
         os.path.join(output_dir, "label_map.json"),
@@ -105,7 +115,7 @@ def main():
 
     # ── Boundary pos_weight — CHỈ tính trên TRAIN (mục D) ────────────────
     pos_weight_max = float(getattr(cfg.model, "boundary_pos_weight_max", 10.0) or 10.0)
-    pw_stats = compute_boundary_pos_weight(train_data, max_pos_weight=pos_weight_max)
+    pw_stats = compute_boundary_pos_weight(train_data, max_pos_weight=pos_weight_max, scheme=label_scheme)
     save_json(pw_stats, os.path.join(output_dir, "boundary_pos_weight_stats.json"))
 
     # ── Tokenizer + dataloader ────────────────────────────────────────────
@@ -118,9 +128,9 @@ def main():
 
     bs = cfg.training.batch_size
     ml = cfg.data.max_len
-    train_loader = make_dataloader(train_data, tokenizer, label2id, ml, bs, shuffle=True, derive_boundary=True)
-    dev_loader   = make_dataloader(dev_data,   tokenizer, label2id, ml, bs, shuffle=False, derive_boundary=True)
-    test_loader  = make_dataloader(test_data,  tokenizer, label2id, ml, bs, shuffle=False, derive_boundary=True)
+    train_loader = make_dataloader(train_data, tokenizer, label2id, ml, bs, shuffle=True, derive_boundary=True, boundary_scheme=label_scheme)
+    dev_loader   = make_dataloader(dev_data,   tokenizer, label2id, ml, bs, shuffle=False, derive_boundary=True, boundary_scheme=label_scheme)
+    test_loader  = make_dataloader(test_data,  tokenizer, label2id, ml, bs, shuffle=False, derive_boundary=True, boundary_scheme=label_scheme)
 
     # ── Model ─────────────────────────────────────────────────────
     OmegaConf.update(cfg, "_num_labels", len(label2id))
@@ -137,7 +147,7 @@ def main():
     wandb_run = setup_wandb(cfg)
 
     # ── Train ─────────────────────────────────────────────────────
-    evaluator = BoundaryEvaluator(model, id2label, device, output_dir)
+    evaluator = BoundaryEvaluator(model, id2label, device, output_dir, label_scheme=label_scheme)
     trainer   = BoundaryTrainer(model, cfg, output_dir, wandb_run)
     train_res = trainer.train(train_loader, dev_loader, evaluator)
 
@@ -154,7 +164,7 @@ def main():
         "method":       method,
         "seed":         cfg.project.seed,
         "backbone":     backbone,
-        "label_scheme": "bioes",
+        "label_scheme": label_scheme,
         "enable_boundary_auxiliary": bool(cfg.model.enable_boundary_auxiliary),
         "boundary_weight": float(cfg.model.boundary_weight),
         "boundary_loss_type": str(cfg.model.boundary_loss_type),

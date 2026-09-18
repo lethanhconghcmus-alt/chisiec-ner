@@ -20,7 +20,7 @@ from typing import Optional
 from transformers import AutoModel
 from torchcrf import CRF
 from src.utils import get_logger
-from src.bioes_utils import apply_hard_transition_constraints, build_bioes_transition_masks
+from src.bioes_utils import apply_hard_transition_constraints, build_transition_masks
 
 logger = get_logger(__name__)
 
@@ -209,6 +209,7 @@ class BertCRFBoundaryNER(nn.Module):
         label2id: Optional[dict] = None,
         constrain_bioes_transitions: bool = True,
         transition_constraint_penalty: float = float("-inf"),
+        label_scheme: str = "bioes",
     ):
         super().__init__()
         if boundary_loss_type not in ("bce", "weighted_bce", "focal"):
@@ -234,16 +235,22 @@ class BertCRFBoundaryNER(nn.Module):
         self.start_pos_weight = start_pos_weight
         self.end_pos_weight = end_pos_weight
 
-        # ── Hard-constrained CRF transitions (BIOES state machine) ────────
+        # ── Hard-constrained CRF transitions (state machine theo label_scheme) ──
         # torchcrf không tự enforce constraint -- xem docstring
         # src/bioes_utils.py:apply_hard_transition_constraints. Cần
         # label2id để biết nhãn nào ứng với index nào trong ma trận
-        # transitions[num_labels, num_labels]. constrain_bioes_transitions=
+        # transitions[num_labels, num_labels]. label_scheme PHẢI khớp đúng
+        # label2id thực tế truyền vào ("bioes" cho M2 21-nhãn, "bio" cho M3
+        # 11-nhãn — dùng nhầm scheme sẽ ép sai luật, vd cấm nhầm B-X->O hợp
+        # lệ trong BIO nếu lỡ áp luật BIOES). constrain_bioes_transitions=
         # False (hoặc label2id=None) -> tắt hẳn, giữ hành vi CRF gốc
         # (torchcrf tự học transition, có thể decode ra chuỗi invalid).
+        if label_scheme not in ("bio", "bioes"):
+            raise ValueError(f"Unknown label_scheme: {label_scheme!r}")
+        self.label_scheme = label_scheme
         self.constrain_bioes_transitions = constrain_bioes_transitions and (label2id is not None)
         if self.constrain_bioes_transitions:
-            illegal_t, illegal_s, illegal_e = build_bioes_transition_masks(label2id)
+            illegal_t, illegal_s, illegal_e = build_transition_masks(label2id, scheme=label_scheme)
             self.register_buffer("_illegal_transition", illegal_t)
             self.register_buffer("_illegal_start", illegal_s)
             self.register_buffer("_illegal_end", illegal_e)
@@ -257,6 +264,7 @@ class BertCRFBoundaryNER(nn.Module):
             f"labels={num_labels} | o_label_id={o_label_id} | "
             f"enable_boundary_auxiliary={enable_boundary_auxiliary} | "
             f"boundary_weight={boundary_weight} | boundary_loss_type={boundary_loss_type} | "
+            f"label_scheme={label_scheme} | "
             f"constrain_bioes_transitions={self.constrain_bioes_transitions}"
         )
 
@@ -396,6 +404,7 @@ def build_model(cfg, label2id: Optional[dict] = None) -> nn.Module:
             focal_gamma=float(getattr(mcfg, "focal_gamma", 2.0)),
             label2id=label2id,
             constrain_bioes_transitions=bool(getattr(mcfg, "constrain_bioes_transitions", True)),
+            label_scheme=str(getattr(cfg.data, "label_scheme", "bioes") or "bioes"),
         )
 
     else:

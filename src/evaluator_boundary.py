@@ -16,7 +16,7 @@ from seqeval.metrics import classification_report, f1_score
 from seqeval.scheme import IOBES
 
 from src.utils import get_logger, save_json
-from src.bioes_utils import bioes_to_spans, repair_bioes_sequence
+from src.bioes_utils import bioes_to_spans, convert_bio_to_bioes, repair_bioes_sequence
 
 logger = get_logger(__name__)
 
@@ -31,12 +31,35 @@ def _binary_prf(tp: int, fp: int, fn: int) -> tuple:
     return p, r, f1
 
 
+def _tags_to_spans_any_scheme(tags: list, label_scheme: str) -> tuple:
+    """Trả (repaired_tags_bioes_form, spans, num_repairs). Với scheme='bio'
+    (M3), decode qua torchcrf đã hard-constrained (illegal_start cấm I-* mở
+    đầu, illegal_transition cấm orphan-I/khác-loại — xem
+    bioes_utils.build_transition_masks(scheme='bio')) nên KHÔNG cần repair
+    thật, nhưng vẫn convert sang BIOES (mode='repair', phòng hờ) để dùng
+    LẠI đúng 1 hàm bioes_to_spans() cho cả 2 scheme thay vì viết trùng logic
+    parse span riêng cho BIO."""
+    if label_scheme == "bio":
+        bioes_tags, n_rep = convert_bio_to_bioes(tags, mode="repair")
+        return bioes_tags, bioes_to_spans(bioes_tags), n_rep
+    repaired, n_rep = repair_bioes_sequence(tags)
+    return repaired, bioes_to_spans(repaired), n_rep
+
+
 class BoundaryEvaluator:
-    def __init__(self, model, id2label: dict, device: torch.device, output_dir: str):
+    def __init__(self, model, id2label: dict, device: torch.device, output_dir: str,
+                 label_scheme: str = "bioes"):
+        """label_scheme: 'bioes' (mặc định, M2) hoặc 'bio' (M3) — PHẢI khớp
+        đúng scheme model thật sự dùng, quyết định cách parse
+        decoded_tags -> spans và cách gọi seqeval (strict IOBES vs BIO
+        mặc định)."""
+        if label_scheme not in ("bio", "bioes"):
+            raise ValueError(f"Unknown label_scheme: {label_scheme!r}")
         self.model = model
         self.id2label = id2label
         self.device = device
         self.output_dir = output_dir
+        self.label_scheme = label_scheme
 
     # ── forward 1 batch, KHÔNG truyền labels -> CRF decode + boundary logits ──
     @torch.no_grad()
@@ -73,8 +96,13 @@ class BoundaryEvaluator:
                 # luôn True (bao gồm CLS) — bỏ phần tử đầu để căn theo
                 # gold_tags (chỉ gồm token thật, không CLS/SEP/pad).
                 pred_tags = pred_tags_full[1: 1 + len(gold_tags)]
-                pred_tags, n_rep = repair_bioes_sequence(pred_tags)
-                total_repairs += n_rep
+                if self.label_scheme == "bioes":
+                    pred_tags, n_rep = repair_bioes_sequence(pred_tags)
+                    total_repairs += n_rep
+                # scheme "bio": không repair -- hard-constrained CRF (scheme
+                # "bio") đã loại orphan-I ở decode, và seqeval mặc định (BIO)
+                # tự xử lý an toàn không cần repair, giống hệt Evaluator cũ
+                # (M0/M1).
                 all_gold_tags.append(gold_tags)
                 all_pred_tags.append(pred_tags)
 
@@ -103,11 +131,11 @@ class BoundaryEvaluator:
                 f"bioes_utils.repair_bioes_sequence)."
             )
 
+        seqeval_kwargs = {"mode": "strict", "scheme": IOBES} if self.label_scheme == "bioes" else {}
         report = classification_report(
-            all_gold_tags, all_pred_tags, output_dict=True, zero_division=0,
-            mode="strict", scheme=IOBES,
+            all_gold_tags, all_pred_tags, output_dict=True, zero_division=0, **seqeval_kwargs,
         )
-        f1 = f1_score(all_gold_tags, all_pred_tags, zero_division=0, mode="strict", scheme=IOBES)
+        f1 = f1_score(all_gold_tags, all_pred_tags, zero_division=0, **seqeval_kwargs)
 
         sp_, sr_, sf1_ = _binary_prf(start_tp, start_fp, start_fn)
         ep_, er_, ef1_ = _binary_prf(end_tp, end_fp, end_fn)
@@ -169,12 +197,8 @@ class BoundaryEvaluator:
                 gold_tags = [self.id2label[l.item()] for l in label_seq if l.item() != -100]
                 pred_tags_full = [self.id2label[p] for p in out.decoded_tags[b]]
                 pred_tags = pred_tags_full[1: 1 + len(gold_tags)]
-                pred_tags_repaired, _ = repair_bioes_sequence(pred_tags)
-                gold_tags_repaired, _ = repair_bioes_sequence(gold_tags)
-
-                gold_spans = bioes_to_spans(gold_tags_repaired)
-                pred_spans = bioes_to_spans(pred_tags_repaired)
-                gold_set, pred_set = set(gold_spans), set(pred_spans)
+                pred_tags_repaired, pred_spans, _ = _tags_to_spans_any_scheme(pred_tags, self.label_scheme)
+                gold_tags_repaired, gold_spans, _ = _tags_to_spans_any_scheme(gold_tags, self.label_scheme)
 
                 sample_categories = _categorize_spans(gold_spans, pred_spans)
                 for c in sample_categories:

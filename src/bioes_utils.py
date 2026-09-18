@@ -195,6 +195,29 @@ def convert_dataset_bio_to_bioes(data: list, mode: str = "strict") -> tuple:
     return out, stats
 
 
+def derive_boundary_labels_from_bio(bio_labels: list) -> tuple:
+    """
+    Suy start/end nhị phân TRỰC TIẾP từ nhãn BIO (dùng cho M3: BIO + boundary
+    heads, KHÔNG cần convert sang BIOES — tránh confound giữa "đổi label
+    scheme" và "thêm boundary heads" khi so sánh với M0/M1/M2).
+      start[i] = 1 nếu tag là B-X.
+      end[i]   = 1 nếu tag != O VÀ (i là token cuối HOẶC token kế tiếp không
+                 phải I-X CÙNG loại X) -- tức là entity "đóng" ở vị trí i,
+                 bất kể đó là B-X (entity 1 token) hay I-X (entity nhiều
+                 token, i là I cuối cùng của chuỗi).
+    """
+    n = len(bio_labels)
+    start = [1 if t.startswith("B-") else 0 for t in bio_labels]
+    end = [0] * n
+    for i, tag in enumerate(bio_labels):
+        if tag == "O":
+            continue
+        etype = tag.split("-", 1)[1]
+        is_last = (i == n - 1) or (bio_labels[i + 1] != f"I-{etype}")
+        end[i] = 1 if is_last else 0
+    return start, end
+
+
 # ── B. BOUNDARY LABEL DERIVATION ────────────────────────────────────────────
 def derive_boundary_labels(bioes_labels: list) -> tuple:
     """
@@ -210,17 +233,23 @@ def derive_boundary_labels(bioes_labels: list) -> tuple:
 
 
 def compute_boundary_pos_weight(
-    dataset: list, max_pos_weight: float = 10.0
+    dataset: list, max_pos_weight: float = 10.0, scheme: str = "bioes",
 ) -> dict:
     """
     Tính pos_weight cho BCEWithLogitsLoss (boundary_loss_type=weighted_bce)
-    TỪ TRAIN SPLIT (dataset: list[(tokens, bioes_labels)]). Clip theo
-    max_pos_weight. Log số positive/negative/pos_weight cho start và end.
-    KHÔNG được gọi với dev/test data (caller chịu trách nhiệm chỉ truyền train).
+    TỪ TRAIN SPLIT (dataset: list[(tokens, labels)], labels ở đúng `scheme`
+    — "bioes" hoặc "bio", xem derive_boundary_labels/
+    derive_boundary_labels_from_bio). Clip theo max_pos_weight. Log số
+    positive/negative/pos_weight cho start và end. KHÔNG được gọi với
+    dev/test data (caller chịu trách nhiệm chỉ truyền train).
     """
+    if scheme not in ("bio", "bioes"):
+        raise ValueError(f"Unknown scheme: {scheme!r}")
+    derive_fn = derive_boundary_labels_from_bio if scheme == "bio" else derive_boundary_labels
+
     n_pos_start = n_pos_end = n_valid = 0
     for _, labels in dataset:
-        start, end = derive_boundary_labels(labels)
+        start, end = derive_fn(labels)
         n_valid += len(labels)
         n_pos_start += sum(start)
         n_pos_end += sum(end)
@@ -439,14 +468,49 @@ def bioes_legal_end(tag: str) -> bool:
     return prefix in ("O", "E", "S")
 
 
-def build_bioes_transition_masks(label2id: dict) -> tuple:
+def bio_legal_transition(prev_tag: str, next_tag: str) -> bool:
+    """State machine cho BIO (KHÔNG có E-/S-, chỉ 2 prefix B/I + O) — dùng
+    cho M3 (BIO + boundary heads). Khác BIOES ở chỗ B-X/I-X không BẮT BUỘC
+    phải đóng bằng E-X: được phép "buông" sang O hoặc B-Y bất kỳ lúc nào
+    (entity 1-token hoặc n-token đều hợp lệ mà không cần marker kết thúc
+    riêng). Chỉ 1 ràng buộc thật: I-X chỉ được theo sau B-X/I-X CÙNG loại X
+    (đây chính là điều kiện `find_bio_violations()`/`convert_bio_to_bioes()`
+    đã dùng để phát hiện "orphan I")."""
+    p_prefix, p_type = _prefix_type(prev_tag)
+    n_prefix, n_type = _prefix_type(next_tag)
+    if n_prefix == "I":
+        return p_prefix in ("B", "I") and p_type == n_type
+    return n_prefix in ("O", "B")
+
+
+def bio_legal_start(tag: str) -> bool:
+    prefix, _ = _prefix_type(tag)
+    return prefix in ("O", "B")  # I-* không được mở đầu chuỗi (orphan I)
+
+
+def bio_legal_end(tag: str) -> bool:
+    return True  # BIO không có marker đóng riêng -- mọi tag đều hợp lệ ở cuối
+
+
+_SCHEME_RULES = {
+    "bioes": (bioes_legal_transition, bioes_legal_start, bioes_legal_end),
+    "bio": (bio_legal_transition, bio_legal_start, bio_legal_end),
+}
+
+
+def build_transition_masks(label2id: dict, scheme: str = "bioes") -> tuple:
     """
     Trả về (illegal_transition, illegal_start, illegal_end) — BoolTensor,
-    True tại vị trí BỊ CẤM. illegal_transition[i, j] = True nếu chuyển từ
-    nhãn i sang nhãn j vi phạm state machine BIOES (mục "Không được có" ở
-    yêu cầu). Dùng với apply_hard_transition_constraints() để bake vào
-    torchcrf.CRF.
+    True tại vị trí BỊ CẤM, theo state machine của `scheme` ("bio" hoặc
+    "bioes"). Dùng với apply_hard_transition_constraints() để bake vào
+    torchcrf.CRF. QUAN TRỌNG: dùng SAI scheme cho label space (vd áp luật
+    BIOES lên 1 label map chỉ có B/I/O) sẽ ép sai — vd cấm nhầm B-X->O hợp
+    lệ trong BIO — nên luôn truyền đúng scheme khớp với label2id thực tế.
     """
+    if scheme not in _SCHEME_RULES:
+        raise ValueError(f"Unknown scheme: {scheme!r}, expect 'bio' or 'bioes'")
+    legal_transition, legal_start, legal_end = _SCHEME_RULES[scheme]
+
     n = len(label2id)
     id2label = {v: k for k, v in label2id.items()}
     illegal_transition = torch.ones(n, n, dtype=torch.bool)
@@ -455,16 +519,22 @@ def build_bioes_transition_masks(label2id: dict) -> tuple:
 
     for i in range(n):
         ti = id2label[i]
-        if bioes_legal_start(ti):
+        if legal_start(ti):
             illegal_start[i] = False
-        if bioes_legal_end(ti):
+        if legal_end(ti):
             illegal_end[i] = False
         for j in range(n):
             tj = id2label[j]
-            if bioes_legal_transition(ti, tj):
+            if legal_transition(ti, tj):
                 illegal_transition[i, j] = False
 
     return illegal_transition, illegal_start, illegal_end
+
+
+def build_bioes_transition_masks(label2id: dict) -> tuple:
+    """Backward-compat wrapper (dùng ở models.py mặc định) — tương đương
+    build_transition_masks(label2id, scheme="bioes")."""
+    return build_transition_masks(label2id, scheme="bioes")
 
 
 def apply_hard_transition_constraints(
