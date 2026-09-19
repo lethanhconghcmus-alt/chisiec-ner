@@ -192,3 +192,79 @@ minh wiring đúng — KHÔNG phản ánh chất lượng thật trên SikuBERT/
 | `model.boundary_pos_weight_max` | clip pos_weight (tính từ TRAIN split) cho `weighted_bce` |
 | `model.focal_alpha`, `model.focal_gamma` | tham số focal loss |
 | `training.encoder_lr/ner_head_lr/boundary_head_lr/crf_lr` | differential LR — xem `src/trainer_boundary.py` |
+
+---
+
+## Annotation consistency audit (KHÔNG sửa nhãn tự động)
+
+Sau khi M0/M1/M2/M3 hội tụ về cùng 1 dải F1 (~0.65-0.67, xem lịch sử ablation
+ở trên), hướng cải thiện tiếp theo là data-centric: audit tính nhất quán
+của gold label hiện có (ORG↔TITLE, PER↔TITLE, LOC↔ORG, DTM, boundary địa
+danh hành chính) trước khi thu thập/annotate thêm data mới.
+
+`scripts/annotation_audit.py` CHỈ ĐỌC train/dev/test hiện có, KHÔNG sửa bất
+kỳ nhãn nào, KHÔNG ghi đè dataset gốc — chỉ sinh **candidate inconsistency**
+(ứng viên cần người adjudicate), không khẳng định gold sai.
+
+```bash
+python scripts/annotation_audit.py \
+    --train data/dvsk/dvsk_train.txt \
+    --dev   data/dvsk/dvsk_dev.txt \
+    --test  data/dvsk/dvsk_test.txt \
+    --out-dir artifacts/audit_v1 \
+    --top-n 300 \
+    [--source-map path/to/record_source_map.json]  # optional, join document_id (chapter DVSKTT)
+```
+
+Output (`artifacts/audit_v1/`, KHÔNG track git — regenerable, xem `.gitignore`):
+- `reports/ambiguity_report.{csv,jsonl}` — surface form gán >=2 nhãn khác nhau.
+- `reports/boundary_admin_suffix_report.json` — LOC lúc có lúc không có hậu
+  tố hành chính (州/府/營/路/鎮/縣/坊/道/社/里) trên cùng 1 "stem".
+- `reports/merge_split_report.json` — surface vừa có bằng chứng bị TÁCH
+  (đứng cạnh entity khác loại) vừa có bằng chứng bị GỘP (là tiền tố của 1
+  entity dài hơn) ở nơi khác trong corpus — tổng quát hóa từ script cũ
+  `find_office_inconsistency.py` cho các cặp ORG/LOC/PER × TITLE.
+- `reports/confusable_pair_report.json` — cross-reference theo đúng 5 cặp
+  dễ nhầm (ORG-TITLE, PER-TITLE, LOC-ORG, DTM-*).
+- `review/review_workbook.{csv,xlsx}` — bảng review, mỗi dòng 1 occurrence
+  cụ thể cần adjudicate, sắp theo `priority_score` (heuristic — xem
+  `src/audit_utils.py:compute_priority_score`), cột `reviewer_decision`/
+  `final_label`/`final_start`/`final_end` để TRỐNG cho reviewer điền, KHÔNG
+  tự động điền.
+- `summary.md` — thống kê tổng quan + top 50 ambiguous surfaces + top
+  boundary inconsistencies.
+- `manifest.json` — timestamp, config, checksum MD5 của từng file data đầu
+  vào (để biết report ứng với đúng version data nào).
+
+**Model disagreement (mục 6, optional)**: `build_review_workbook()` hỗ trợ
+tham số `model_disagreements` nếu có checkpoint + prediction, nhưng lần
+chạy audit_v1 KHÔNG bật (không có checkpoint M0 gốc cục bộ — chỉ có M1/M2/M3
+kiến trúc khác, dùng nhầm sẽ gắn nhãn "M0 disagreement" sai sự thật). Muốn
+bật: tự chạy inference, build dict `{(split, sample_id): {"confidence":...}}`
+rồi truyền vào `build_review_workbook`.
+
+### Quy trình tạo dataset v2 sau adjudication
+
+```
+dataset_v1   = data/dvsk/dvsk_{train,dev,test}.txt hiện tại (đã freeze, dùng cho M0-M3)
+guideline_v2 = rule mới thống nhất sau khi reviewer quyết định các case trong review_workbook
+dataset_v2   = dataset_v1 + labels đã adjudicate (CÓ changelog, KHÔNG sửa lặng lẽ)
+```
+
+1. Reviewer mở `review_workbook.xlsx`, điền `reviewer_decision`
+   (OK/SỬA/BỎ), `final_label`/`final_start`/`final_end` nếu sửa,
+   `guideline_rule_id` tham chiếu rule mới nếu có.
+2. Freeze `guideline_v2` (văn bản rule, giống `docs/annotation_guideline.md`
+   ở repo `ancient-chinese-ner`) TRƯỚC khi áp bất kỳ thay đổi nào — không
+   sửa data trước rồi mới viết rule diễn giải ngược.
+3. Viết script `apply_adjudication.py` (chưa có — làm ở bước sau) đọc
+   `review_workbook.xlsx` đã điền, áp đúng các dòng có `reviewer_decision`,
+   sinh `dvsk_{train,dev,test}_v2.txt` + report số dòng đã sửa (đối chiếu
+   pattern đã dùng thành công trước đó: `scripts/apply_gold_review.py` ở
+   repo `ancient-chinese-ner`, gold review v2.1).
+4. Chạy lại **M0 (SikuBERT+CRF+BIO)** trên `dataset_v2` TRƯỚC khi thu thập
+   data mới — tách bạch được "F1 tăng do label quality" hay "do thêm data"
+   (thứ tự này quan trọng — làm ngược sẽ khiến active-learning pool thu
+   thập sau kế thừa đúng ambiguity chưa xử lý).
+5. Chỉ sau đó mới build raw pool + active learning (B0-B4 active-vs-random,
+   xem memory `dvsktt-bioes-boundary-heads`).

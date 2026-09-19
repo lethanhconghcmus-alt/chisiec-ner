@@ -20,6 +20,11 @@ outputs/
 checkpoints/*
 !checkpoints/.gitkeep
 
+# Annotation audit output (regenerable từ data + scripts/annotation_audit.py,
+# review_workbook.xlsx là working document của reviewer -- không track diff
+# nhị phân trong git). Xem README.md mục "Annotation consistency audit".
+artifacts/audit_*/
+
 # Experiment tracking
 wandb/
 
