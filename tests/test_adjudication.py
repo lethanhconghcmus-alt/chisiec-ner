@@ -182,3 +182,256 @@ def test_validate_dataset_checksums_no_error_when_matching_or_missing_prior():
     assert validate_dataset_checksums({"dataset_checksums": {"train": "x"}}, {"train": "x"}) == []
     assert validate_dataset_checksums(None, {"train": "x"}) == []
     assert validate_dataset_checksums({"dataset_checksums": {}}, {"train": "x"}) == []
+
+
+# ── process_boundary_split_fillin ──────────────────────────────────────────
+def _entity_full(split, sample_id, start, end, label, surface, text):
+    return {"split": split, "sample_id": sample_id, "start": start, "end": end,
+            "label": label, "surface": surface, "text": text,
+            "document_id": None, "entity_id": f"{split}-{sample_id}-{start}"}
+
+
+def test_boundary_fillin_widens_span_correctly():
+    from src.adjudication import process_boundary_split_fillin
+    text = "希葛為延河伯祐豐為提刑監察御史臺奏"
+    # "御史" tai vi tri 13-14 (2 ky tu), mo rong them '臺' o vi tri 15
+    entities = [_entity_full("train", 17, 13, 14, "TITLE", "御史", text)]
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([{
+        "row_type": "CORRECT_BOUNDARY", "entity_id": "x", "split": "train", "sample_id": 17,
+        "document_id": None, "gold_surface": "御史", "gold_start": 13, "gold_end": 14,
+        "gold_label": "TITLE", "full_sentence": text, "final_label": "ORG",
+        "final_start": 13, "final_end": 15, "split2_start": None, "fill_notes": "",
+        "existing_reviewer_notes": "",
+    }])
+    proposed, skipped = process_boundary_split_fillin(df, idx)
+    assert skipped == []
+    assert len(proposed) == 1
+    c = proposed[0]
+    assert c.new_span == (13, 15)
+    assert c.new_label == "ORG"
+    assert c.validation_status == "valid"
+    assert text[c.new_span[0]:c.new_span[1] + 1] == "御史臺"
+
+
+def test_boundary_fillin_missing_final_fields_is_skipped():
+    from src.adjudication import process_boundary_split_fillin
+    entities = [_entity_full("train", 1, 0, 1, "TITLE", "御史", "御史臺奏事")]
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([{
+        "row_type": "CORRECT_BOUNDARY", "entity_id": "x", "split": "train", "sample_id": 1,
+        "document_id": None, "gold_surface": "御史", "gold_start": 0, "gold_end": 1,
+        "gold_label": "TITLE", "full_sentence": "御史臺奏事", "final_label": None,
+        "final_start": None, "final_end": None, "split2_start": None,
+        "fill_notes": "", "existing_reviewer_notes": "",
+    }])
+    proposed, skipped = process_boundary_split_fillin(df, idx)
+    assert proposed == []
+    assert skipped[0].reason == "final_label_or_offset_still_missing"
+
+
+def test_boundary_fillin_split_entity_without_split2_treated_as_single_widen():
+    from src.adjudication import process_boundary_split_fillin
+    text = "明成化十八年"
+    entities = [_entity_full("train", 79, 0, 2, "ORG", "明成化", text)]
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([{
+        "row_type": "SPLIT_ENTITY", "entity_id": "x", "split": "train", "sample_id": 79,
+        "document_id": None, "gold_surface": "明成化", "gold_start": 0, "gold_end": 2,
+        "gold_label": "ORG", "full_sentence": text, "final_label": "DTM",
+        "final_start": 0, "final_end": 5, "split2_start": None,
+        "fill_notes": "", "existing_reviewer_notes": "",
+    }])
+    proposed, skipped = process_boundary_split_fillin(df, idx)
+    assert len(proposed) == 1  # KHONG tach thanh 2, vi split2 de trong
+    assert proposed[0].new_span == (0, 5)
+    assert proposed[0].new_label == "DTM"
+
+
+def test_boundary_fillin_real_split_produces_two_changes():
+    from src.adjudication import process_boundary_split_fillin
+    text = "明成化十八年"
+    entities = [_entity_full("train", 79, 0, 5, "ORG", "明成化十八年", text)]
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([{
+        "row_type": "SPLIT_ENTITY", "entity_id": "x", "split": "train", "sample_id": 79,
+        "document_id": None, "gold_surface": "明成化十八年", "gold_start": 0, "gold_end": 5,
+        "gold_label": "ORG", "full_sentence": text,
+        "final_label": "ORG", "final_start": 0, "final_end": 0,
+        "split2_start": 1, "split2_end": 5, "split2_label": "DTM",
+        "fill_notes": "", "existing_reviewer_notes": "",
+    }])
+    proposed, skipped = process_boundary_split_fillin(df, idx)
+    assert len(proposed) == 2
+    assert proposed[0].new_span == (0, 0) and proposed[0].new_label == "ORG"
+    assert proposed[1].new_span == (1, 5) and proposed[1].new_label == "DTM"
+    assert all(c.validation_status == "valid" for c in proposed)
+
+
+def test_boundary_fillin_stale_dataset_detected_as_error():
+    from src.adjudication import process_boundary_split_fillin
+    # Entity hien tai KHONG con dung o vi tri/nhan da ghi trong workbook
+    entities = [_entity_full("train", 1, 0, 1, "ORG", "御史", "御史臺")]
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([{
+        "row_type": "CORRECT_BOUNDARY", "entity_id": "x", "split": "train", "sample_id": 1,
+        "document_id": None, "gold_surface": "御史", "gold_start": 0, "gold_end": 1,
+        "gold_label": "TITLE",  # workbook ghi TITLE nhung live data la ORG
+        "full_sentence": "御史臺", "final_label": "ORG",
+        "final_start": 0, "final_end": 2, "split2_start": None,
+        "fill_notes": "", "existing_reviewer_notes": "",
+    }])
+    proposed, skipped = process_boundary_split_fillin(df, idx)
+    assert len(proposed) == 1
+    assert proposed[0].validation_status == "error"
+    assert "mismatch" in proposed[0].validation_message
+
+
+# ── MERGE_ENTITY generic support ─────────────────────────────────────────────
+from src.adjudication import build_entity_by_id, process_collision_candidates, validate_and_build_merge
+
+
+def _merge_row(collision_id, split, sample_id, merged_ids, resulting_start, resulting_end,
+                resulting_label, expected_surface="", rule_id="GR-TEST", notes="test note",
+                action="MERGE_ENTITY"):
+    return {
+        "collision_id": collision_id, "split": split, "sample_id": sample_id,
+        "document_id": None, "selected_action": action,
+        "merged_entity_ids": ";".join(merged_ids),
+        "resulting_start": resulting_start, "resulting_end": resulting_end,
+        "resulting_label": resulting_label, "expected_resulting_surface": expected_surface,
+        "guideline_rule_id": rule_id, "reviewer_notes": notes,
+    }
+
+
+def test_merge_two_adjacent_dtm_valid():
+    text = "明成化十七年春"
+    entities = [
+        _entity_full("train", 1, 0, 2, "ORG", "明成化", text),
+        _entity_full("train", 1, 3, 5, "DTM", "十七年", text),
+    ]
+    entities[0]["entity_id"] = "e1"
+    entities[1]["entity_id"] = "e2"
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([_merge_row(1, "train", 1, ["e1", "e2"], 0, 5, "DTM", "明成化十七年")])
+    proposed, skipped = process_collision_candidates(df, entities, idx)
+    assert skipped == []
+    assert len(proposed) == 1
+    m = proposed[0]
+    assert m.validation_status == "valid"
+    assert m.resulting_span == (0, 5)
+    assert m.resulting_label == "DTM"
+    assert set(m.source_entity_ids) == {"e1", "e2"}
+
+
+def test_merge_two_adjacent_per_valid():
+    text = "陳太宗即位"
+    entities = [
+        _entity_full("train", 2, 0, 0, "ORG", "陳", text),
+        _entity_full("train", 2, 1, 2, "PER", "太宗", text),
+    ]
+    entities[0]["entity_id"] = "a1"
+    entities[1]["entity_id"] = "a2"
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([_merge_row(2, "train", 2, ["a1", "a2"], 0, 2, "PER", "陳太宗")])
+    proposed, skipped = process_collision_candidates(df, entities, idx)
+    assert len(proposed) == 1
+    assert proposed[0].validation_status == "valid"
+
+
+def test_merge_invalid_when_would_overlap_third_entity():
+    text = "故都御史臺奏"
+    entities = [
+        _entity_full("train", 3, 0, 1, "LOC", "故都", text),
+        _entity_full("train", 3, 2, 3, "TITLE", "御史", text),
+        _entity_full("train", 3, 4, 4, "ORG", "臺", text),
+    ]
+    entities[0]["entity_id"] = "b1"
+    entities[1]["entity_id"] = "b2"
+    entities[2]["entity_id"] = "b3"
+    idx = build_entity_index(entities)
+    # merge b1+b2 (0..3) se de len b3 (4,4)? khong, thu truong hop de len that:
+    # merge chi b2 (2,3) mo rong sang (1,3) se de len b1 (0,1) vi 1 nam trong (0,1)
+    df = pd.DataFrame([_merge_row(3, "train", 3, ["b2"], 1, 3, "TITLE", "都御史")])
+    proposed, skipped = process_collision_candidates(df, entities, idx)
+    # merged_entity_ids chi co 1 -> khong du 2 nguon
+    assert proposed == []
+    assert skipped[0].reason == "merged_entity_ids_missing_or_less_than_2"
+
+
+def test_merge_invalid_source_entities_different_sample():
+    entities = [
+        _entity_full("train", 1, 0, 1, "DTM", "明成", "明成化"),
+        _entity_full("train", 2, 0, 1, "DTM", "化十", "化十年"),
+    ]
+    entities[0]["entity_id"] = "c1"
+    entities[1]["entity_id"] = "c2"
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([_merge_row(4, "train", 1, ["c1", "c2"], 0, 1, "DTM", "??")])
+    proposed, skipped = process_collision_candidates(df, entities, idx)
+    assert len(proposed) == 1
+    assert proposed[0].validation_status == "error"
+    assert "not_all_same_sample" in proposed[0].validation_message
+
+
+def test_merge_not_applied_when_selected_action_blank():
+    entities = [_entity_full("train", 1, 0, 1, "DTM", "明成", "明成化十七年")]
+    entities[0]["entity_id"] = "d1"
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([_merge_row(5, "train", 1, ["d1"], 0, 1, "DTM", action="")])
+    proposed, skipped = process_collision_candidates(df, entities, idx)
+    assert proposed == []
+    assert skipped[0].reason == "pending_review"
+
+
+def test_merge_missing_guideline_rule_id_or_notes_rejected():
+    text = "明成化十七年"
+    entities = [
+        _entity_full("train", 1, 0, 2, "ORG", "明成化", text),
+        _entity_full("train", 1, 3, 5, "DTM", "十七年", text),
+    ]
+    entities[0]["entity_id"] = "e1"
+    entities[1]["entity_id"] = "e2"
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([_merge_row(6, "train", 1, ["e1", "e2"], 0, 5, "DTM", rule_id="", notes="")])
+    proposed, skipped = process_collision_candidates(df, entities, idx)
+    assert proposed == []
+    assert skipped[0].reason in ("missing_guideline_rule_id",)  # kiem tra dau tien trong ham
+
+
+def test_merge_atomic_sources_disappear_result_is_single_entity():
+    """Test 'atomic': logic downstream (khi that su apply -- chua implement
+    o vong nay) phai the hien merged entity thay THE cho ca 2 nguon, khong
+    con giu nguyen 2 nguon cu. O muc validate, ta kiem tra source_entity_ids
+    duoc ghi day du va resulting_span duy nhat bao trum ca 2."""
+    text = "明成化十七年"
+    entities = [
+        _entity_full("train", 1, 0, 2, "ORG", "明成化", text),
+        _entity_full("train", 1, 3, 5, "DTM", "十七年", text),
+    ]
+    entities[0]["entity_id"] = "e1"
+    entities[1]["entity_id"] = "e2"
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([_merge_row(7, "train", 1, ["e1", "e2"], 0, 5, "DTM", "明成化十七年")])
+    proposed, skipped = process_collision_candidates(df, entities, idx)
+    m = proposed[0]
+    assert m.validation_status == "valid"
+    assert len(m.source_spans) == 2
+    assert m.resulting_span == (0, 5)
+    # Khong co "third" span nao con lai trong ket qua -- chi 1 resulting span duy nhat
+
+
+def test_dataset_v1_immutable_process_functions_never_mutate_entities():
+    text = "明成化十七年"
+    entities = [
+        _entity_full("train", 1, 0, 2, "ORG", "明成化", text),
+        _entity_full("train", 1, 3, 5, "DTM", "十七年", text),
+    ]
+    entities[0]["entity_id"] = "e1"
+    entities[1]["entity_id"] = "e2"
+    import copy
+    snapshot = copy.deepcopy(entities)
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([_merge_row(8, "train", 1, ["e1", "e2"], 0, 5, "DTM", "明成化十七年")])
+    process_collision_candidates(df, entities, idx)
+    assert entities == snapshot

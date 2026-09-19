@@ -29,6 +29,8 @@ from src.data_utils import read_conll
 from src.audit_utils import extract_all_spans, load_source_map, _file_checksum
 from src.adjudication import (
     build_entity_index,
+    process_boundary_split_fillin,
+    process_collision_candidates,
     process_deepdive_occurrences,
     process_guideline_ambiguities_surface_level,
     process_singleton_anomalies,
@@ -46,6 +48,10 @@ def main():
                      help="Thư mục chứa review_priority_singleton_anomalies.xlsx và review_guideline_ambiguities.xlsx")
     ap.add_argument("--audit-manifest", default=None,
                      help="artifacts/audit_v1/manifest.json gốc, dùng để so checksum dataset")
+    ap.add_argument("--boundary-split-fillin", default=None,
+                     help="boundary_split_fill_in.xlsx (scripts/export_boundary_split_fillin.py) đã điền final_start/final_end, optional")
+    ap.add_argument("--collision-candidates", default=None,
+                     help="collision_merge_candidates.xlsx (scripts/export_collision_candidates.py), optional")
     ap.add_argument("--out-dir", default="artifacts/adjudication_v2_dry_run")
     ap.add_argument("--apply", action="store_true",
                      help="BẮT BUỘC truyền tường minh để ghi dataset_v2 thật. Mặc định KHÔNG có = dry-run.")
@@ -104,6 +110,48 @@ def main():
         all_skipped.extend(skipped)
     else:
         global_errors.append(f"Khong tim thay {guideline_path}")
+
+    # Các case đã được xác định là "collision" (xem
+    # scripts/export_collision_candidates.py) PHẢI được xử lý qua
+    # collision_merge_candidates.xlsx (phân loại riêng, không tự merge),
+    # KHÔNG được xử lý lại như CORRECT_BOUNDARY thường qua
+    # boundary_split_fill_in.xlsx (tránh báo trùng 1 case ở cả 2 nơi).
+    collision_keys = set()
+    if args.collision_candidates and os.path.exists(args.collision_candidates):
+        df_collision = pd.read_excel(args.collision_candidates)
+        for _, r in df_collision.iterrows():
+            ps, pe = str(r["proposed_new_span"]).split("-")
+            collision_keys.add((r["split"], int(r["sample_id"]), int(ps), int(pe)))
+
+    if args.boundary_split_fillin:
+        if os.path.exists(args.boundary_split_fillin):
+            df_bs = pd.read_excel(args.boundary_split_fillin)
+            if collision_keys:
+                is_collision = df_bs.apply(
+                    lambda r: (r["split"], int(r["sample_id"]), int(r["final_start"]), int(r["final_end"]))
+                    in collision_keys, axis=1,
+                )
+                n_excluded = int(is_collision.sum())
+                if n_excluded:
+                    print(f"[INFO] Loai {n_excluded} dong khoi boundary_split_fillin vi da "
+                          f"duoc xu ly rieng qua collision_merge_candidates.xlsx")
+                df_bs = df_bs[~is_collision]
+            proposed, skipped = process_boundary_split_fillin(df_bs, entity_index,
+                                                                change_id_start=len(all_proposed))
+            all_proposed.extend(proposed)
+            all_skipped.extend(skipped)
+        else:
+            global_errors.append(f"Khong tim thay {args.boundary_split_fillin}")
+
+    if args.collision_candidates:
+        if os.path.exists(args.collision_candidates):
+            proposed, skipped = process_collision_candidates(
+                df_collision, entities, entity_index, change_id_start=len(all_proposed),
+            )
+            all_proposed.extend(proposed)
+            all_skipped.extend(skipped)
+        else:
+            global_errors.append(f"Khong tim thay {args.collision_candidates}")
 
     # ── 3. Phân loại valid / error ───────────────────────────────────────
     valid_changes = [c for c in all_proposed if c.validation_status == "valid"]

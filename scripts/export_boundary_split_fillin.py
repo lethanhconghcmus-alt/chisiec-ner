@@ -85,10 +85,20 @@ def main():
         ref = str(r["record_ref"])
         split, sample_id = ref.split(":", 1)
         sample_id = int(sample_id)
-        # tim entity tuong ung qua surface + minority_label trong cau do
+        # tim entity tuong ung qua CA surface LAN minority_label trong cau do
+        # (BUG da fix: chi loc theo label la khong du khi 1 cau co nhieu
+        # entity cung nhan, vd 3 TITLE trong 1 cau -- se lay nham entity
+        # dau tien thay vi dung surface, xem case 大行/經畧使 test:139).
         cand = [e for e in entities if e["split"] == split and e["sample_id"] == sample_id
-                and e["label"] == r["minority_label"]]
+                and e["label"] == r["minority_label"] and e["surface"] == r["surface"]]
+        if len(cand) > 1:
+            print(f"WARNING: {len(cand)} entity trung surface={r['surface']!r} "
+                  f"label={r['minority_label']!r} tai {split}:{sample_id} -- lay entity dau tien, "
+                  f"KIEM TRA LAI thu cong.")
         e = cand[0] if cand else None
+        if e is None:
+            print(f"WARNING: KHONG tim thay entity khop surface={r['surface']!r} "
+                  f"label={r['minority_label']!r} tai {split}:{sample_id} -- dong nay se thieu du lieu song.")
         rows.append({
             "row_type": "CORRECT_BOUNDARY",
             "source": "singleton_anomalies",
