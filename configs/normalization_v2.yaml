@@ -1,0 +1,16 @@
+# ─────────────────────────────────────────────────────────────────
+# Normalization v2 — PUA mapping đã VERIFY thủ công (guideline_v2 GR-02)
+# CHỈ thêm codepoint mới vào đây sau khi đã verify tất cả context xuất
+# hiện của nó (xem reports/pua_inventory.csv, cột mapping_status).
+# KHÔNG đoán mapping cho codepoint chưa verify.
+# ─────────────────────────────────────────────────────────────────
+version: "2.0-draft"
+verified_pua_mapping:
+  - codepoint: "U+F0C51"
+    replacement: "臺"
+    verified_by: "user (domain reviewer), session 2026-09-20"
+    evidence: "toàn bộ context xuất hiện đều thuộc cụm 御史臺/都察院 -- dị thể của 臺"
+  - codepoint: "U+F025F"
+    replacement: "臺"
+    verified_by: "user (domain reviewer), session 2026-09-20"
+    evidence: "cùng cụm 御史臺, font/encoding khác tạo ra codepoint PUA thứ 2 cho cùng 1 chữ"

@@ -1,0 +1,152 @@
+version: "2.0-draft"
+date: "2026-09-20"
+author: "<TODO: tên reviewer/domain expert chính thức>"
+status: "DRAFT — chưa freeze, chờ xác nhận cuối trước khi dùng cho apply_adjudication --apply"
+provenance:
+  source_review: "artifacts/audit_v1/review/review_guideline_ambiguities.xlsx (sheet guideline_rules, guideline_ambiguities, deepdive_occurrences)"
+  source_session: "2026-09-19/20, domain reviewer tự điền 100% (300+ occurrence)"
+schema:
+  labels: [PER, LOC, ORG, TITLE, DTM]
+  nested_entities: false
+  note: "Schema flat (không nested) -- mọi rule mơ hồ PHẢI có priority rule tường minh, không được giả định model/annotator tự suy ra ưu tiên."
+  offset_convention: "inclusive start/end (text[start:end+1] == surface), thống nhất với toàn bộ codebase (src/bioes_utils.py, src/audit_utils.py)."
+
+rules:
+  - id: GR-01
+    name: "Chức quan vs cơ quan"
+    statement: >
+      Tên chức/hàm đứng một mình mà chỉ người giữ chức -> TITLE. Chỉ gán
+      ORG khi rõ ràng chỉ nha môn/cơ quan (thường có 司/臺/院/部/衙門).
+    typical_surfaces: [御史, 承司, 憲察使, 平章, 官員, 大學士, 駙馬, 都指揮使, 陪臣, 廷尉, 賊将, 刑官]
+    examples:
+      - text: "希葛為延河伯祐豐為提刑監察御史"
+        span: "御史"
+        label: TITLE
+        reason: "chỉ người giữ chức, không phải cơ quan"
+
+  - id: GR-02
+    name: "PUA/Unicode normalization (御史臺 boundary)"
+    statement: >
+      Một số bản digitize dùng codepoint Private Use Area (PUA) cho chữ 臺
+      thay vì ký tự Unicode chuẩn, khiến tokenizer/annotator bỏ sót khi
+      gán span (御史臺 bị cắt còn 御史). PHẢI normalize text_raw ->
+      text_normalized TRƯỚC khi review boundary, dùng bảng mapping đã
+      verify (configs/normalization_v2.yaml), KHÔNG suy đoán mapping cho
+      codepoint chưa verify.
+    verified_pua_mapping:
+      - codepoint: "U+F0C51"
+        replacement: "臺"
+      - codepoint: "U+F025F"
+        replacement: "臺"
+    process:
+      - "Lưu text_raw nguyên gốc, không bao giờ ghi đè."
+      - "Sinh text_normalized qua src.normalization.normalize_text_with_alignment()."
+      - "Ghi raw_to_normalized/normalized_to_raw offset map, validate round-trip trước khi dùng cho bất kỳ mục đích training/eval nào."
+      - "Boundary fix (御史 -> 御史臺) là 1 hành động CORRECT_BOUNDARY RIÊNG BIỆT với việc normalize ký tự -- normalize không tự ý mở rộng span."
+    unresolved: "107 codepoint PUA khác (992 lần xuất hiện) trong corpus CHƯA verify -- không phải lỗi 御史臺, đa số là biến thể chữ Hán hiếm hợp lệ. Cần audit riêng, không gộp vào fix này."
+
+  - id: GR-03
+    name: "X氏 = dòng họ"
+    statement: >
+      Cấu trúc [họ]+氏 chỉ dòng họ/thế lực chính trị -> ORG, kể cả khi
+      hoán dụ chỉ người đứng đầu. Chỉ dùng PER khi đi kèm tên riêng đầy đủ.
+    typical_surfaces: [莫氏, 陳氏, 黎氏, 李氏]
+
+  - id: GR-04
+    name: "Triều đại / quốc hiệu một chữ"
+    statement: >
+      Họ vua dùng làm tên triều hoặc tên nước -> ORG. Nếu span một chữ
+      thực ra là chữ đầu bị cắt của tên người thì phải MỞ RỘNG span -> PER
+      (không giữ nguyên span 1 chữ và đổi nhãn).
+    typical_surfaces: [吳, 陳, 李, 晋, 黎朝, 皇朝]
+    counterexample: "陳時見/陳太宗/黎輔陳 -- span 1 chữ '陳' bị cắt từ tên người, phải mở rộng span, không chỉ đổi nhãn."
+
+  - id: GR-05
+    name: "Chính thể vs lãnh thổ"
+    statement: >
+      Ngoại bang xuất hiện như tác nhân (chinh phạt/triều cống/xâm
+      lấn/cử sứ) -> ORG. Khi chỉ vị trí/đích đến trong không gian
+      (在/自/奔/至...境, 國中) -> LOC.
+    typical_surfaces: [哀牢, 林邑, 南詔, 南越, 明國, 占城]
+
+  - id: GR-06
+    name: "Tộc danh"
+    statement: "Tên tộc người/nhóm dân -> ORG, không bao giờ PER, kể cả khi đi với động từ hành động."
+    typical_surfaces: [蠻, 蛮, 明人, 夷獠, 哀牢人, 林邑人]
+
+  - id: GR-07
+    name: "Miếu hiệu/niên hiệu định danh vua"
+    statement: "Định danh duy nhất một vua cụ thể (miếu hiệu + 皇/廟, niên hiệu + 帝) -> PER."
+    typical_surfaces: [昭皇, 藝皇, 仁廟, 光紹帝, 陳太宗]
+
+  - id: GR-08
+    name: "Kính xưng chung"
+    statement: "Cách gọi áp dụng được cho bất kỳ người giữ ngôi nào, không định danh duy nhất -> TITLE."
+    typical_surfaces: [皇上, 大行皇帝, 上皇, 帝]
+    note: "大行皇帝 mơ hồ giữa nghĩa gốc 'vua vừa băng' (TITLE) và miếu hiệu Lê Đại Hành (PER) -- xét từng ngữ cảnh, không mass-correct."
+
+  - id: GR-09
+    name: "Công trình vs thiết chế vs sự kiện (OUT-OF-SCHEMA EVENT)"
+    statement: >
+      Cung/điện/miếu/đường là kiến trúc -> LOC. Kỳ thi và buổi giảng
+      (會試, 經筵) là SỰ KIỆN, KHÔNG khớp bất kỳ nhãn nào trong schema v2.0
+      (PER/LOC/ORG/TITLE/DTM). EVENT KHÔNG được thêm làm nhãn mới ở v2.0
+      (là hướng nghiên cứu schema v3 tương lai). Nếu hiện có gold entity
+      cho các span kiểu này, action đúng là REMOVE_OUT_OF_SCHEMA_ENTITY
+      sau khi reviewer xác nhận, không ép thành ORG/TITLE.
+    typical_surfaces_LOC: [太廟, 勤政殿, 朝堂, 聖慈宫]
+    typical_surfaces_out_of_schema: [會試, 經筵]
+    audit_field: "semantic_role_candidate = EVENT (dùng để lọc case này trong review, không phải nhãn gold)"
+
+  - id: GR-10
+    name: "Đơn vị hành chính"
+    statement: >
+      Khi chỉ vùng đất -> LOC; khi chỉ bộ máy cai trị của vùng đó -> ORG.
+      Tỷ lệ 50/50 trong corpus hiện tại (vd 奉天府) -- CẦN reviewer/domain
+      expert chốt 1 chiều mặc định, chưa tự chốt ở bản draft này.
+    typical_surfaces: [奉天府, 府縣, 邕州, 京, 五嶺]
+    status: "OPEN -- cần quyết định trước khi apply hàng loạt cho nhóm này."
+
+  - id: GR-11
+    name: "Tách [triều/polity] + [niên hiệu/era] + [năm]"
+    statement: >
+      Với schema flat hiện tại, khi prefix là polity/dynasty riêng biệt và
+      phần sau là era-name + số năm, PHẢI tách thành 2 entity, KHÔNG gộp
+      thành 1 span duy nhất.
+    examples:
+      - raw: "明成化十八年"
+        split: "明[ORG] + 成化十八年[DTM]"
+      - raw: "大越洪德二十年"
+        split: "大越[ORG] + 洪德二十年[DTM]"
+      - raw: "洪德二十年"
+        note: "không có polity riêng đứng trước -> giữ nguyên 1 span DTM (洪德二十年), không tách."
+    process: >
+      Rule chỉ áp dụng SAU KHI review từng occurrence/candidate cụ thể
+      (xem scripts/scan_dynasty_era_candidates.py, review-only, KHÔNG
+      regex mass-relabel). offset convention: inclusive end, giống toàn
+      bộ repo.
+    unresolved_counterexamples: >
+      524 candidate tìm được (113 high confidence trùng khít gold hiện
+      có, 227 medium overlap 1 phần, 184 low chỉ match raw text) -- CHƯA
+      review, xem artifacts/audit_v1/review/dynasty_era_candidates.xlsx.
+
+  - id: GR-12
+    name: "Tên người"
+    statement: "Tên riêng của nhân vật có thật -> PER, bất kể đứng cạnh tước hiệu hay không."
+    typical_surfaces: [日燏, 莫大正(tên người), 國瓚, 吳日慶, 吳真流]
+    case_note: >
+      日燏 (Trần Nhật Duật): 32 occurrence, verify thủ công TOÀN BỘ đều là
+      PERSON (không có ngữ cảnh nào đọc như tổ chức) -- 20 ca gold=ORG là
+      lỗi hệ thống, không phải ambiguity theo ngữ cảnh. 16/20 đã
+      CORRECT_LABEL->PER, 4/20 còn NEEDS_DOMAIN_EXPERT (xem
+      domain_expert_cases_riyue.xlsx, chưa áp dụng).
+
+  - id: GR-13
+    name: "Hạng thi"
+    statement: "Thứ hạng khoa cử -> TITLE, không phải DTM (chữ 甲 dễ bị nhầm với can chi)."
+    typical_surfaces: [第二甲, 第三甲, 同進士出身]
+
+  - id: GR-14
+    name: "Từ chỉ thời gian"
+    statement: "Từ chỉ ngày/tiết trong lịch -> DTM."
+    typical_surfaces: [元旦, 冬十月, 春正月]

@@ -24,6 +24,7 @@ checkpoints/*
 # review_workbook.xlsx là working document của reviewer -- không track diff
 # nhị phân trong git). Xem README.md mục "Annotation consistency audit".
 artifacts/audit_*/
+artifacts/adjudication_v2_dry_run/
 
 # Experiment tracking
 wandb/
