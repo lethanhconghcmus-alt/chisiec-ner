@@ -28,6 +28,7 @@ import pandas as pd
 from src.data_utils import read_conll
 from src.audit_utils import extract_all_spans, load_source_map, _file_checksum
 from src.adjudication import (
+    ProposedMerge,
     build_entity_index,
     process_boundary_split_fillin,
     process_collision_candidates,
@@ -153,9 +154,15 @@ def main():
         else:
             global_errors.append(f"Khong tim thay {args.collision_candidates}")
 
-    # ── 3. Phân loại valid / error ───────────────────────────────────────
-    valid_changes = [c for c in all_proposed if c.validation_status == "valid"]
-    error_changes = [c for c in all_proposed if c.validation_status != "valid"]
+    # ── 3. Phân loại valid / error (tách riêng ProposedChange vs ProposedMerge
+    # -- 2 schema khác nhau, không gộp chung 1 CSV) ───────────────────────
+    all_changes = [c for c in all_proposed if not isinstance(c, ProposedMerge)]
+    all_merges = [c for c in all_proposed if isinstance(c, ProposedMerge)]
+
+    valid_changes = [c for c in all_changes if c.validation_status == "valid"]
+    error_changes = [c for c in all_changes if c.validation_status != "valid"]
+    valid_merges = [m for m in all_merges if m.validation_status == "valid"]
+    error_merges = [m for m in all_merges if m.validation_status != "valid"]
 
     # ── 4. Ghi output (luôn ghi, kể cả dry-run) ─────────────────────────
     os.makedirs(args.out_dir, exist_ok=True)
@@ -164,12 +171,24 @@ def main():
         for c in valid_changes:
             f.write(json.dumps(c.to_row(), ensure_ascii=False) + "\n")
 
-    changelog_rows = [c.to_row() for c in all_proposed]
+    with open(os.path.join(args.out_dir, "proposed_merges_diff.jsonl"), "w", encoding="utf-8") as f:
+        for m in valid_merges:
+            f.write(json.dumps(m.to_row(), ensure_ascii=False) + "\n")
+
+    changelog_rows = [c.to_row() for c in all_changes]
     with open(os.path.join(args.out_dir, "changelog_draft.csv"), "w", newline="", encoding="utf-8-sig") as f:
         if changelog_rows:
             writer = csv.DictWriter(f, fieldnames=list(changelog_rows[0].keys()))
             writer.writeheader()
             for r in changelog_rows:
+                writer.writerow(r)
+
+    merge_rows = [m.to_row() for m in all_merges]
+    with open(os.path.join(args.out_dir, "merge_changelog_draft.csv"), "w", newline="", encoding="utf-8-sig") as f:
+        if merge_rows:
+            writer = csv.DictWriter(f, fieldnames=list(merge_rows[0].keys()))
+            writer.writeheader()
+            for r in merge_rows:
                 writer.writerow(r)
 
     with open(os.path.join(args.out_dir, "skipped_decisions.csv"), "w", newline="", encoding="utf-8-sig") as f:
@@ -195,6 +214,14 @@ def main():
                 "source_workbook_row": c.source_workbook_row,
                 "validation_message": c.validation_message,
             })
+        for m in error_merges:
+            writer.writerow({
+                "change_id": m.change_id, "split": m.split, "sample_id": m.sample_id,
+                "surface_old_label": "+".join(s[3] for s in m.source_spans),
+                "new_label": m.resulting_label,
+                "source_workbook_row": m.source_workbook_row,
+                "validation_message": m.validation_message,
+            })
         for i, ge in enumerate(global_errors):
             writer.writerow({
                 "change_id": f"GLOBAL-{i}", "split": "", "sample_id": "",
@@ -215,6 +242,8 @@ def main():
         "",
         f"- Proposed changes (valid, sẵn sàng apply): **{len(valid_changes)}**",
         f"- Proposed changes (validation error, KHÔNG áp): **{len(error_changes)}**",
+        f"- Proposed merges (valid, sẵn sàng apply): **{len(valid_merges)}**",
+        f"- Proposed merges (validation error, KHÔNG áp): **{len(error_merges)}**",
         f"- Skipped decisions (theo policy, không cố gắng apply): **{len(all_skipped)}**",
         f"- Global validation errors: **{len(global_errors)}**",
         "",
@@ -236,6 +265,16 @@ def main():
             f"- [{c.split}:{c.sample_id}] {c.old_label} -> {c.new_label} "
             f"(span {c.old_span} không đổi, decision={c.reviewer_decision})"
         )
+    if valid_merges:
+        summary_lines.append("")
+        summary_lines.append("## Valid proposed merges")
+        for m in valid_merges:
+            src_desc = " + ".join(f"{s[3]}/{s[2]}" for s in m.source_spans)
+            summary_lines.append(
+                f"- [{m.split}:{m.sample_id}] {src_desc} -> "
+                f"{m.resulting_label}[{m.resulting_span[0]}-{m.resulting_span[1]}] "
+                f"(rule={m.rule_id})"
+            )
     with open(os.path.join(args.out_dir, "summary.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(summary_lines))
 
@@ -249,7 +288,9 @@ def main():
         )
 
     print(f"[DRY RUN] Valid proposed changes: {len(valid_changes)}")
-    print(f"[DRY RUN] Validation errors: {len(error_changes)}")
+    print(f"[DRY RUN] Validation errors (changes): {len(error_changes)}")
+    print(f"[DRY RUN] Valid proposed merges: {len(valid_merges)}")
+    print(f"[DRY RUN] Validation errors (merges): {len(error_merges)}")
     print(f"[DRY RUN] Skipped decisions: {len(all_skipped)}")
     print(f"[DRY RUN] Global errors: {len(global_errors)}")
     print(f"Output -> {args.out_dir}/")

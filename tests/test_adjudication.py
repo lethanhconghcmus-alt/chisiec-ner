@@ -435,3 +435,38 @@ def test_dataset_v1_immutable_process_functions_never_mutate_entities():
     df = pd.DataFrame([_merge_row(8, "train", 1, ["e1", "e2"], 0, 5, "DTM", "明成化十七年")])
     process_collision_candidates(df, entities, idx)
     assert entities == snapshot
+
+
+def test_merge_allows_small_gap_between_sources_for_split_name_reconstruction():
+    # 黎(PER,33) ... 輔(khong gan nhan, 34) ... 陳(PER,35) -> gop thanh 黎輔陳/PER
+    text_prefix = "x" * 33
+    text = text_prefix + "黎輔陳" + "y" * 5
+    entities = [
+        _entity_full("train", 107, 33, 33, "PER", "黎", text),
+        _entity_full("train", 107, 35, 35, "PER", "陳", text),
+    ]
+    entities[0]["entity_id"] = 1567
+    entities[1]["entity_id"] = 1568
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([_merge_row(9, "train", 107, ["1567", "1568"], 33, 35, "PER",
+                                    "黎輔陳", rule_id="GR-12", notes="ten bi cat lam doi")])
+    proposed, skipped = process_collision_candidates(df, entities, idx)
+    assert len(proposed) == 1
+    assert proposed[0].validation_status == "valid"
+    assert proposed[0].resulting_span == (33, 35)
+
+
+def test_merge_rejects_gap_too_large_between_sources():
+    text = "黎" + "z" * 20 + "陳"
+    entities = [
+        _entity_full("train", 1, 0, 0, "PER", "黎", text),
+        _entity_full("train", 1, 21, 21, "PER", "陳", text),
+    ]
+    entities[0]["entity_id"] = 9001
+    entities[1]["entity_id"] = 9002
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([_merge_row(10, "train", 1, ["9001", "9002"], 0, 21, "PER", text)])
+    proposed, skipped = process_collision_candidates(df, entities, idx)
+    assert len(proposed) == 1
+    assert proposed[0].validation_status == "error"
+    assert "gap_too_large" in proposed[0].validation_message

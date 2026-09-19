@@ -475,12 +475,23 @@ def validate_and_build_merge(
     elif sources[0]["split"] != split or sources[0]["sample_id"] != sample_id:
         error_msg = "source_entities_do_not_match_declared_split_sample_id"
 
+    # Khoảng cách giữa các entity nguồn: KHÔNG bắt buộc liền kề tuyệt đối --
+    # 1 case thật (黎輔陳 = Lê Phụ Trần) có khoảng cách 1 ký tự (輔) giữa 2
+    # entity 1-chữ vì tên bị cắt làm đôi lúc annotate; khoảng trống đó
+    # CHÍNH LÀ bằng chứng cần merge, không phải lý do từ chối. An toàn thật
+    # sự nằm ở 3 chỗ khác: (1) resulting_span phải khớp CHÍNH XÁC min/max
+    # nguồn (không tự ý nuốt thêm ký tự ngoài phạm vi khai báo), (2)
+    # expected_resulting_surface phải khớp đúng text thật tại offset đó,
+    # (3) resulting_span không được đè lên entity thứ 3 nào khác (bao gồm
+    # cả entity nằm lọt trong khoảng trống). Chỉ chặn cứng khi khoảng cách
+    # quá lớn (>10 ký tự) — dấu hiệu nhập sai entity_id nhiều khả năng hơn
+    # là 1 tên bị cắt.
     sources_sorted = sorted(sources, key=lambda e: e["start"])
     if error_msg is None:
         for a, b in zip(sources_sorted, sources_sorted[1:]):
             gap = b["start"] - a["end"] - 1
-            if gap > 0 and not spans_overlap(a["start"], a["end"], b["start"], b["end"]):
-                error_msg = "source_entities_not_adjacent_or_overlapping"
+            if gap > 10 and not spans_overlap(a["start"], a["end"], b["start"], b["end"]):
+                error_msg = f"source_entities_gap_too_large_suspicious ({gap} ky tu)"
                 break
 
     if resulting_label not in ENTITY_TYPES:
@@ -561,7 +572,18 @@ def process_collision_candidates(df: pd.DataFrame, entities: list, entity_index:
         raw_ids = row.get("merged_entity_ids")
         merged_entity_ids = []
         if not pd.isna(raw_ids):
-            merged_entity_ids = [s.strip() for s in str(raw_ids).split(";") if s.strip()]
+            merged_entity_ids_raw = [s.strip() for s in str(raw_ids).split(";") if s.strip()]
+            # entity_id thật trong entities list la int (xem
+            # extract_all_spans); Excel luon doc merged_entity_ids ve dang
+            # text "1567;1568" -- ep kieu ve int de khop dung, giu nguyen
+            # string goc neu khong phai so (se bi bao loi "not_found" ro
+            # rang thay vi so sanh sai kieu am tham).
+            merged_entity_ids = []
+            for s in merged_entity_ids_raw:
+                try:
+                    merged_entity_ids.append(int(s))
+                except ValueError:
+                    merged_entity_ids.append(s)
 
         def _to_int_or_none(v):
             try:
