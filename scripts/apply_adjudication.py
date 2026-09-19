@@ -29,11 +29,13 @@ from src.data_utils import read_conll
 from src.audit_utils import extract_all_spans, load_source_map, _file_checksum
 from src.adjudication import (
     ProposedMerge,
+    ProposedRemoval,
     build_entity_index,
     process_boundary_split_fillin,
     process_collision_candidates,
     process_deepdive_occurrences,
     process_guideline_ambiguities_surface_level,
+    process_review_transactions,
     process_singleton_anomalies,
     validate_dataset_checksums,
 )
@@ -53,6 +55,10 @@ def main():
                      help="boundary_split_fill_in.xlsx (scripts/export_boundary_split_fillin.py) đã điền final_start/final_end, optional")
     ap.add_argument("--collision-candidates", default=None,
                      help="collision_merge_candidates.xlsx (scripts/export_collision_candidates.py), optional")
+    ap.add_argument("--transactions", action="append", default=[],
+                     help="File transaction (vd yushi_gudu_transaction.xlsx) — mỗi dòng 1 action, "
+                          "cột transaction_id nhóm action commit atomic. Có thể truyền nhiều lần. "
+                          "CHỈ truyền khi reviewer đã điền đủ field bắt buộc.")
     ap.add_argument("--out-dir", default="artifacts/adjudication_v2_dry_run")
     ap.add_argument("--apply", action="store_true",
                      help="BẮT BUỘC truyền tường minh để ghi dataset_v2 thật. Mặc định KHÔNG có = dry-run.")
@@ -154,10 +160,25 @@ def main():
         else:
             global_errors.append(f"Khong tim thay {args.collision_candidates}")
 
+    for tx_path in args.transactions:
+        if os.path.exists(tx_path):
+            df_tx = pd.read_excel(tx_path)
+            proposed, skipped = process_review_transactions(
+                df_tx, entities, entity_index, change_id_start=len(all_proposed),
+            )
+            all_proposed.extend(proposed)
+            all_skipped.extend(skipped)
+        else:
+            global_errors.append(f"Khong tim thay {tx_path}")
+
     # ── 3. Phân loại valid / error (tách riêng ProposedChange vs ProposedMerge
-    # -- 2 schema khác nhau, không gộp chung 1 CSV) ───────────────────────
-    all_changes = [c for c in all_proposed if not isinstance(c, ProposedMerge)]
+    # vs ProposedRemoval -- schema khác nhau, không gộp chung 1 CSV) ──────
+    all_removals = [c for c in all_proposed if isinstance(c, ProposedRemoval)]
+    all_changes = [c for c in all_proposed if not isinstance(c, ProposedMerge) and not isinstance(c, ProposedRemoval)]
     all_merges = [c for c in all_proposed if isinstance(c, ProposedMerge)]
+
+    valid_removals = [r for r in all_removals if r.validation_status == "valid"]
+    error_removals = [r for r in all_removals if r.validation_status != "valid"]
 
     valid_changes = [c for c in all_changes if c.validation_status == "valid"]
     error_changes = [c for c in all_changes if c.validation_status != "valid"]
@@ -191,6 +212,14 @@ def main():
             for r in merge_rows:
                 writer.writerow(r)
 
+    removal_rows = [r.to_row() for r in all_removals]
+    with open(os.path.join(args.out_dir, "removal_changelog_draft.csv"), "w", newline="", encoding="utf-8-sig") as f:
+        if removal_rows:
+            writer = csv.DictWriter(f, fieldnames=list(removal_rows[0].keys()))
+            writer.writeheader()
+            for r in removal_rows:
+                writer.writerow(r)
+
     with open(os.path.join(args.out_dir, "skipped_decisions.csv"), "w", newline="", encoding="utf-8-sig") as f:
         fieldnames = ["source_workbook_row", "split", "sample_id", "surface", "reviewer_decision", "reason"]
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -222,6 +251,13 @@ def main():
                 "source_workbook_row": m.source_workbook_row,
                 "validation_message": m.validation_message,
             })
+        for r in error_removals:
+            writer.writerow({
+                "change_id": r.change_id, "split": r.split, "sample_id": r.sample_id,
+                "surface_old_label": r.old_label, "new_label": "REMOVED",
+                "source_workbook_row": r.source_workbook_row,
+                "validation_message": r.validation_message,
+            })
         for i, ge in enumerate(global_errors):
             writer.writerow({
                 "change_id": f"GLOBAL-{i}", "split": "", "sample_id": "",
@@ -244,6 +280,8 @@ def main():
         f"- Proposed changes (validation error, KHÔNG áp): **{len(error_changes)}**",
         f"- Proposed merges (valid, sẵn sàng apply): **{len(valid_merges)}**",
         f"- Proposed merges (validation error, KHÔNG áp): **{len(error_merges)}**",
+        f"- Proposed removals (valid, sẵn sàng apply): **{len(valid_removals)}**",
+        f"- Proposed removals (validation error, KHÔNG áp): **{len(error_removals)}**",
         f"- Skipped decisions (theo policy, không cố gắng apply): **{len(all_skipped)}**",
         f"- Global validation errors: **{len(global_errors)}**",
         "",
@@ -291,6 +329,8 @@ def main():
     print(f"[DRY RUN] Validation errors (changes): {len(error_changes)}")
     print(f"[DRY RUN] Valid proposed merges: {len(valid_merges)}")
     print(f"[DRY RUN] Validation errors (merges): {len(error_merges)}")
+    print(f"[DRY RUN] Valid proposed removals: {len(valid_removals)}")
+    print(f"[DRY RUN] Validation errors (removals): {len(error_removals)}")
     print(f"[DRY RUN] Skipped decisions: {len(all_skipped)}")
     print(f"[DRY RUN] Global errors: {len(global_errors)}")
     print(f"Output -> {args.out_dir}/")

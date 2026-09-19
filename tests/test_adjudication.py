@@ -470,3 +470,172 @@ def test_merge_rejects_gap_too_large_between_sources():
     assert len(proposed) == 1
     assert proposed[0].validation_status == "error"
     assert "gap_too_large" in proposed[0].validation_message
+
+
+# ---------------------------------------------------------------------------
+# REMOVE_ENTITY + transaction (atomic)
+# ---------------------------------------------------------------------------
+from src.adjudication import ProposedRemoval, process_review_transactions, validate_removal
+
+
+def test_remove_entity_valid_explicit_removal():
+    text = "AA" + "故都" + "御史" + "杜岳"
+    entities = [
+        _entity_full("train", 437, 2, 3, "LOC", "故都", text),
+        _entity_full("train", 437, 4, 5, "TITLE", "御史", text),
+    ]
+    entities[0]["entity_id"] = 6272
+    entities[1]["entity_id"] = 6273
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([{
+        "transaction_id": "T1", "action": "REMOVE_ENTITY", "split": "train", "sample_id": 437,
+        "document_id": None, "source_entity_id": 6272, "old_label": "LOC",
+        "old_start": 2, "old_end": 3, "guideline_rule_id": "GR-02",
+        "remove_reason": "annotation rac, khong phai dia danh",
+        "reviewer_notes": "co nghia da mat, khong phai co do",
+    }])
+    proposed, skipped = process_review_transactions(df, entities, idx)
+    assert skipped == []
+    assert len(proposed) == 1
+    r = proposed[0]
+    assert r.validation_status == "valid"
+    assert r.old_label == "LOC"
+
+
+def test_remove_entity_missing_reason_rejected():
+    entities = [_entity_full("train", 1, 0, 1, "LOC", "AB", "AB御史")]
+    entities[0]["entity_id"] = 1
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([{
+        "transaction_id": "T1", "action": "REMOVE_ENTITY", "split": "train", "sample_id": 1,
+        "document_id": None, "source_entity_id": 1, "old_label": "LOC",
+        "old_start": 0, "old_end": 1, "guideline_rule_id": "GR-02",
+        "remove_reason": "", "reviewer_notes": "some note",
+    }])
+    proposed, skipped = process_review_transactions(df, entities, idx)
+    assert proposed == []
+    assert skipped[0].reason == "missing_remove_reason"
+
+
+def test_remove_entity_wrong_entity_id_rejected():
+    entities = [_entity_full("train", 1, 0, 1, "LOC", "AB", "AB御史")]
+    entities[0]["entity_id"] = 1
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([{
+        "transaction_id": "T1", "action": "REMOVE_ENTITY", "split": "train", "sample_id": 1,
+        "document_id": None, "source_entity_id": 9999, "old_label": "LOC",
+        "old_start": 0, "old_end": 1, "guideline_rule_id": "GR-02",
+        "remove_reason": "rac", "reviewer_notes": "note",
+    }])
+    proposed, skipped = process_review_transactions(df, entities, idx)
+    assert proposed == []
+    assert "source_entity_id_not_found" in skipped[0].reason
+
+
+def test_remove_entity_dataset_v1_immutable():
+    text = "AB御史"
+    entities = [_entity_full("train", 1, 0, 1, "LOC", "AB", text)]
+    entities[0]["entity_id"] = 1
+    import copy
+    snapshot = copy.deepcopy(entities)
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([{
+        "transaction_id": "T1", "action": "REMOVE_ENTITY", "split": "train", "sample_id": 1,
+        "document_id": None, "source_entity_id": 1, "old_label": "LOC",
+        "old_start": 0, "old_end": 1, "guideline_rule_id": "GR-02",
+        "remove_reason": "rac", "reviewer_notes": "note",
+    }])
+    process_review_transactions(df, entities, idx)
+    assert entities == snapshot
+
+
+def test_transaction_atomic_remove_plus_boundary_correction_succeeds():
+    text_prefix = "x" * 81
+    text = text_prefix + "故都御史" + "y" * 5
+    entities = [
+        _entity_full("train", 437, 81, 82, "LOC", "故都", text),
+        _entity_full("train", 437, 83, 84, "TITLE", "御史", text),
+    ]
+    entities[0]["entity_id"] = 6272
+    entities[1]["entity_id"] = 6273
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([
+        {"transaction_id": "T-yushi", "action": "REMOVE_ENTITY", "split": "train", "sample_id": 437,
+         "document_id": None, "source_entity_id": 6272, "old_label": "LOC",
+         "old_start": 81, "old_end": 82, "guideline_rule_id": "GR-02",
+         "remove_reason": "annotation rac", "reviewer_notes": "note",
+         "final_start": None, "final_end": None, "final_label": None, "merged_entity_ids": None,
+         "expected_resulting_surface": None},
+        {"transaction_id": "T-yushi", "action": "CORRECT_BOUNDARY", "split": "train", "sample_id": 437,
+         "document_id": None, "source_entity_id": 6273, "old_label": "TITLE",
+         "old_start": 83, "old_end": 84, "final_start": 82, "final_end": 84, "final_label": "TITLE",
+         "guideline_rule_id": "GR-02", "reviewer_notes": "note",
+         "remove_reason": None, "merged_entity_ids": None, "expected_resulting_surface": None},
+    ])
+    proposed, skipped = process_review_transactions(df, entities, idx)
+    assert skipped == []
+    assert len(proposed) == 2
+    assert all(p.validation_status == "valid" for p in proposed)
+    removal = next(p for p in proposed if isinstance(p, ProposedRemoval))
+    correction = next(p for p in proposed if not isinstance(p, ProposedRemoval))
+    assert removal.old_label == "LOC"
+    assert correction.new_span == (82, 84)
+
+
+def test_transaction_failed_linked_correction_rolls_back_removal():
+    text_prefix = "x" * 81
+    text = text_prefix + "故都御史" + "y" * 5
+    entities = [
+        _entity_full("train", 437, 81, 82, "LOC", "故都", text),
+        _entity_full("train", 437, 83, 84, "TITLE", "御史", text),
+    ]
+    entities[0]["entity_id"] = 6272
+    entities[1]["entity_id"] = 6273
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([
+        {"transaction_id": "T-yushi", "action": "REMOVE_ENTITY", "split": "train", "sample_id": 437,
+         "document_id": None, "source_entity_id": 6272, "old_label": "LOC",
+         "old_start": 81, "old_end": 82, "guideline_rule_id": "GR-02",
+         "remove_reason": "annotation rac", "reviewer_notes": "note",
+         "final_start": None, "final_end": None, "final_label": None, "merged_entity_ids": None,
+         "expected_resulting_surface": None},
+        {"transaction_id": "T-yushi", "action": "CORRECT_BOUNDARY", "split": "train", "sample_id": 437,
+         "document_id": None, "source_entity_id": 6273, "old_label": "TITLE",
+         "old_start": 83, "old_end": 84, "final_start": 82, "final_end": 84,
+         "final_label": "NOT_A_REAL_LABEL",
+         "guideline_rule_id": "GR-02", "reviewer_notes": "note",
+         "remove_reason": None, "merged_entity_ids": None, "expected_resulting_surface": None},
+    ])
+    proposed, skipped = process_review_transactions(df, entities, idx)
+    assert proposed == []
+    assert len(skipped) == 2
+    assert all(s.reason.startswith("transaction_rolled_back_due_to") for s in skipped)
+
+
+def test_transaction_changelog_records_both_actions_when_committed():
+    text_prefix = "x" * 81
+    text = text_prefix + "故都御史" + "y" * 5
+    entities = [
+        _entity_full("train", 437, 81, 82, "LOC", "故都", text),
+        _entity_full("train", 437, 83, 84, "TITLE", "御史", text),
+    ]
+    entities[0]["entity_id"] = 6272
+    entities[1]["entity_id"] = 6273
+    idx = build_entity_index(entities)
+    df = pd.DataFrame([
+        {"transaction_id": "T-yushi", "action": "REMOVE_ENTITY", "split": "train", "sample_id": 437,
+         "document_id": None, "source_entity_id": 6272, "old_label": "LOC",
+         "old_start": 81, "old_end": 82, "guideline_rule_id": "GR-02",
+         "remove_reason": "annotation rac", "reviewer_notes": "note",
+         "final_start": None, "final_end": None, "final_label": None, "merged_entity_ids": None,
+         "expected_resulting_surface": None},
+        {"transaction_id": "T-yushi", "action": "CORRECT_BOUNDARY", "split": "train", "sample_id": 437,
+         "document_id": None, "source_entity_id": 6273, "old_label": "TITLE",
+         "old_start": 83, "old_end": 84, "final_start": 82, "final_end": 84, "final_label": "TITLE",
+         "guideline_rule_id": "GR-02", "reviewer_notes": "note",
+         "remove_reason": None, "merged_entity_ids": None, "expected_resulting_surface": None},
+    ])
+    proposed, skipped = process_review_transactions(df, entities, idx)
+    assert len(proposed) == 2
+    assert sum(1 for p in proposed if isinstance(p, ProposedRemoval)) == 1
+    assert sum(1 for p in proposed if not isinstance(p, ProposedRemoval)) == 1

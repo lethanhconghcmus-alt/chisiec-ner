@@ -71,15 +71,21 @@ lược đã xác lập rõ từ câu trước (elliptical reference). 89 stem h
   và xác nhận làm giảm F1 (xem memory dự án `dvsktt-ner-project`, thử
   2026-08-16, F1 DTM giảm 0.578→0.482) vì nhiều cặp DTM liền kề là 2 gold
   entity thật riêng biệt. Giữ quyết định gộp/tách theo từng câu cụ thể.
-- Niên hiệu+năm là DTM khi đứng riêng (`洪德二十年`); khi có polity/triều
-  đứng trước cần tách theo GR-11 (`明成化十八年` → `明`/ORG + `成化十八年`/DTM).
+- **GR-11 (ĐÃ ĐẢO NGƯỢC 2026-09-20)**: date formula hoàn chỉnh
+  [triều/chính thể]+[niên hiệu]+[năm/tháng/ngày/can-chi] → **whole-span
+  DTM duy nhất** (`明成化十七年` → 1 span DTM, KHÔNG tách `明`/ORG riêng).
+  Bằng chứng: corpus dùng whole-span nhất quán cross-document, dạng tách
+  compositional có 0 attestation. Vẫn `PENDING FOCUSED AUDIT` — chưa
+  freeze, xem `docs/guideline_v2.0_draft.yaml` mục GR-11 để biết lịch sử
+  đảo ngược và điều kiện áp dụng (chỉ khi prefix KHÔNG phải referent độc
+  lập ngoài date formula).
 
 ## Việc CHƯA xong (không tự chốt trong bản draft này)
 
 | Vấn đề | Trạng thái |
 |---|---|
 | GR-10 (đơn vị hành chính LOC vs ORG) | OPEN, 50/50, cần domain expert chốt 1 chiều mặc định |
-| GR-11 (524 candidate tách polity+era) | Chưa review, chỉ mới scan |
+| GR-11 (date formula whole-span DTM) | Policy mới đã chốt hướng, đang chạy focused audit qua `scripts/audit_date_formula_gr11.py`, CHƯA apply occurrence nào |
 | GR-09 (EVENT: 會試/經筵) | Chưa quyết định remove hay giữ tạm |
 | 107 codepoint PUA chưa verify (992 lần) | Không liên quan trực tiếp lỗi 御史臺, cần audit riêng nếu muốn xử lý |
 | 52 surface trong `guideline_ambiguities` không có occurrence-level review | Quyết định hiện tại chỉ ở mức surface, KHÔNG auto-apply được (xem `apply_adjudication.py`) |

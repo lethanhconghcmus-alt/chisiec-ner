@@ -111,11 +111,17 @@ def spans_overlap(a_start: int, a_end: int, b_start: int, b_end: int) -> bool:
 
 
 def check_no_overlap_after_edit(entities_in_sentence: list, new_start: int, new_end: int,
-                                 exclude_start: int, exclude_end: int) -> bool:
+                                 exclude_start: int, exclude_end: int,
+                                 ignore_entity_ids: frozenset = frozenset()) -> bool:
     """True nếu (new_start,new_end) không đè lên bất kỳ entity nào KHÁC
-    trong câu (bỏ qua chính entity đang sửa, nhận diện qua old span)."""
+    trong câu (bỏ qua chính entity đang sửa, nhận diện qua old span; và bỏ
+    qua mọi entity trong `ignore_entity_ids` -- dùng khi sửa boundary
+    nằm CÙNG 1 transaction với 1 REMOVE_ENTITY khác, entity đó sẽ không
+    còn tồn tại sau khi transaction commit nên không tính là overlap)."""
     for e in entities_in_sentence:
         if e["start"] == exclude_start and e["end"] == exclude_end:
+            continue
+        if e["entity_id"] in ignore_entity_ids:
             continue
         if spans_overlap(new_start, new_end, e["start"], e["end"]):
             return False
@@ -398,11 +404,10 @@ SELECTED_ACTION_OPTIONS = [
     "MERGE_ENTITY", "KEEP_SEPARATE", "CORRECT_BOUNDARY", "REMOVE_ENTITY",
     "GUIDELINE_AMBIGUITY", "NEEDS_DOMAIN_EXPERT",
 ]
-# CHỈ MERGE_ENTITY được implement để tự động validate+apply ở vòng này
-# (theo đúng yêu cầu mục C — "Thêm support MERGE_ENTITY"). Các action khác
-# (KEEP_SEPARATE/CORRECT_BOUNDARY/REMOVE_ENTITY/GUIDELINE_AMBIGUITY/
-# NEEDS_DOMAIN_EXPERT) chỉ được LOG Ý ĐỊNH, không tự apply gì — cần bước
-# implement riêng sau nếu cần.
+# MERGE_ENTITY (collision workbook, đơn lẻ) và REMOVE_ENTITY/CORRECT_BOUNDARY
+# (qua transaction, xem process_review_transactions) được implement để tự
+# động validate+apply. KEEP_SEPARATE/GUIDELINE_AMBIGUITY/NEEDS_DOMAIN_EXPERT
+# chỉ LOG Ý ĐỊNH, không tự apply gì.
 IMPLEMENTED_SELECTED_ACTIONS = {"MERGE_ENTITY"}
 
 
@@ -617,6 +622,287 @@ def process_collision_candidates(df: pd.DataFrame, entities: list, entity_index:
         change_id += 1
 
     return proposed, skipped
+
+
+# ── REMOVE_ENTITY + transaction (atomic multi-action) support ─────────────
+TRANSACTION_ACTION_OPTIONS = {"REMOVE_ENTITY", "CORRECT_BOUNDARY", "MERGE_ENTITY"}
+
+
+@dataclass
+class ProposedRemoval:
+    change_id: int
+    sample_id: int
+    split: str
+    document_id: Optional[str]
+    rule_id: str
+    source_entity_id: object
+    old_span: tuple
+    old_label: str
+    old_surface: str
+    remove_reason: str
+    reviewer_notes: str
+    source_workbook_row: str
+    linked_transaction_id: Optional[str]
+    validation_status: str
+    validation_message: str = ""
+
+    def to_row(self) -> dict:
+        return dict(
+            change_id=self.change_id, sample_id=self.sample_id, split=self.split,
+            document_id=self.document_id, rule_id=self.rule_id, action="REMOVE_ENTITY",
+            source_entity_id=self.source_entity_id, old_span=list(self.old_span),
+            old_label=self.old_label, old_surface=self.old_surface,
+            remove_reason=self.remove_reason, reviewer_notes=self.reviewer_notes,
+            source_workbook_row=self.source_workbook_row,
+            linked_transaction_id=self.linked_transaction_id,
+            validation_status=self.validation_status, validation_message=self.validation_message,
+        )
+
+
+def validate_removal(
+    row_id: str, sample_id: int, split: str, document_id, entity_by_id: dict,
+    source_entity_id, old_label_expected: Optional[str], old_start_expected: Optional[int],
+    old_end_expected: Optional[int], guideline_rule_id, reviewer_notes, remove_reason,
+    change_id: int, linked_transaction_id: Optional[str] = None,
+) -> "tuple[Optional[ProposedRemoval], Optional[SkippedDecision]]":
+    """
+    REMOVE_ENTITY chỉ hợp lệ khi (mục A.1): entity_id tồn tại, sample/split
+    khớp, old span/label khớp entity hiện có, guideline_rule_id +
+    reviewer_notes + remove_reason đều KHÔNG rỗng. KHÔNG cho phép
+    auto-remove chỉ vì overlap -- hàm này không tự suy ra source_entity_id
+    từ overlap, luôn cần reviewer chỉ định tường minh.
+    """
+    if not guideline_rule_id or (isinstance(guideline_rule_id, float) and pd.isna(guideline_rule_id)):
+        return None, SkippedDecision(row_id, split, sample_id, None, "REMOVE_ENTITY",
+                                      "missing_guideline_rule_id")
+    if not reviewer_notes or (isinstance(reviewer_notes, float) and pd.isna(reviewer_notes)) \
+            or not str(reviewer_notes).strip():
+        return None, SkippedDecision(row_id, split, sample_id, None, "REMOVE_ENTITY",
+                                      "missing_reviewer_notes")
+    if not remove_reason or (isinstance(remove_reason, float) and pd.isna(remove_reason)) \
+            or not str(remove_reason).strip():
+        return None, SkippedDecision(row_id, split, sample_id, None, "REMOVE_ENTITY",
+                                      "missing_remove_reason")
+    if source_entity_id is None or (isinstance(source_entity_id, float) and pd.isna(source_entity_id)):
+        return None, SkippedDecision(row_id, split, sample_id, None, "REMOVE_ENTITY",
+                                      "missing_source_entity_id")
+
+    try:
+        source_entity_id = int(source_entity_id)
+    except (TypeError, ValueError):
+        pass  # giữ nguyên (vd string id), lookup sẽ tự bao trung neu khong khop
+
+    e = entity_by_id.get(source_entity_id)
+    if e is None:
+        return None, SkippedDecision(row_id, split, sample_id, None, "REMOVE_ENTITY",
+                                      f"source_entity_id_not_found:{source_entity_id}")
+
+    status, msg = "valid", ""
+    if e["split"] != split or e["sample_id"] != sample_id:
+        status, msg = "error", "entity_sample_or_split_mismatch"
+    elif old_label_expected and e["label"] != old_label_expected:
+        status, msg = "error", f"old_label_mismatch (live={e['label']!r} expected={old_label_expected!r})"
+    elif old_start_expected is not None and old_end_expected is not None and \
+            (e["start"], e["end"]) != (int(old_start_expected), int(old_end_expected)):
+        status, msg = "error", f"old_span_mismatch (live={(e['start'], e['end'])} expected={(old_start_expected, old_end_expected)})"
+
+    removal = ProposedRemoval(
+        change_id=change_id, sample_id=sample_id, split=split, document_id=document_id,
+        rule_id=str(guideline_rule_id), source_entity_id=source_entity_id,
+        old_span=(e["start"], e["end"]), old_label=e["label"], old_surface=e["surface"],
+        remove_reason=str(remove_reason), reviewer_notes=str(reviewer_notes),
+        source_workbook_row=row_id, linked_transaction_id=linked_transaction_id,
+        validation_status=status, validation_message=msg,
+    )
+    return removal, None
+
+
+def _validate_boundary_in_transaction(
+    row_id, sample_id, split, document_id, entity_by_id, entity_index,
+    source_entity_id, old_label_expected, old_start_expected, old_end_expected,
+    final_start, final_end, final_label, guideline_rule_id, reviewer_notes,
+    change_id, ignore_entity_ids: frozenset,
+) -> "tuple[Optional[object], Optional[SkippedDecision]]":
+    """CORRECT_BOUNDARY bên trong 1 transaction -- giống
+    process_boundary_split_fillin nhưng overlap-check bỏ qua các entity
+    SẼ BỊ REMOVE trong cùng transaction (chúng sẽ không còn tồn tại sau
+    khi commit nên không tính là chồng lấn)."""
+    if final_start is None or final_end is None or not final_label or pd.isna(final_label):
+        return None, SkippedDecision(row_id, split, sample_id, None, "CORRECT_BOUNDARY",
+                                      "missing_final_label_or_offset")
+    try:
+        source_entity_id_int = int(source_entity_id)
+    except (TypeError, ValueError):
+        source_entity_id_int = source_entity_id
+    e = entity_by_id.get(source_entity_id_int)
+    if e is None:
+        return None, SkippedDecision(row_id, split, sample_id, None, "CORRECT_BOUNDARY",
+                                      f"source_entity_id_not_found:{source_entity_id}")
+
+    final_start, final_end = int(final_start), int(final_end)
+    status, msg = "valid", ""
+    if old_label_expected and e["label"] != old_label_expected:
+        status, msg = "error", "old_label_mismatch"
+    elif (old_start_expected is not None and (e["start"], e["end"]) != (int(old_start_expected), int(old_end_expected))):
+        status, msg = "error", "old_span_mismatch"
+    elif final_label not in ENTITY_TYPES:
+        status, msg = "error", f"invalid_final_label:{final_label}"
+    elif final_end >= len(e["text"]):
+        status, msg = "error", "final_end_out_of_bounds"
+    else:
+        ents_here = entity_index.get((split, sample_id), [])
+        if not check_no_overlap_after_edit(ents_here, final_start, final_end, e["start"], e["end"],
+                                            ignore_entity_ids=ignore_entity_ids):
+            status, msg = "error", "would_overlap_another_entity_not_in_transaction"
+
+    change = ProposedChange(
+        change_id=change_id, sample_id=sample_id, split=split, document_id=document_id,
+        rule_id=str(guideline_rule_id) if guideline_rule_id else "transaction",
+        reviewer_decision="CORRECT_BOUNDARY", old_span=(e["start"], e["end"]), old_label=e["label"],
+        new_span=(final_start, final_end), new_label=final_label,
+        original_text=e["text"], normalized_text_if_any=None,
+        reviewer_notes=str(reviewer_notes) if reviewer_notes else "",
+        source_workbook_row=row_id, validation_status=status, validation_message=msg,
+    )
+    return change, None
+
+
+def process_review_transactions(df: pd.DataFrame, entities: list, entity_index: dict,
+                                 change_id_start: int = 0) -> tuple:
+    """
+    Mỗi dòng = 1 action (REMOVE_ENTITY | CORRECT_BOUNDARY | MERGE_ENTITY),
+    cột `transaction_id` nhóm các action PHẢI cùng valid mới được commit
+    (atomic — mục A.4). Nếu 1 action trong transaction fail validation,
+    TOÀN BỘ transaction bị rollback (chuyển hết thành skipped, dù các
+    action khác riêng lẻ có valid hay không).
+    """
+    entity_by_id = build_entity_by_id(entities)
+    groups = {}
+    for i, row in df.iterrows():
+        tid = row.get("transaction_id")
+        tid = str(tid) if not pd.isna(tid) else f"__single_row_{i}"
+        groups.setdefault(tid, []).append((i, row))
+
+    all_results = []
+    skipped = []
+    change_id = change_id_start
+
+    for tid, rows in groups.items():
+        removed_ids_in_group = set()
+        for i, row in rows:
+            action = str(row.get("action") or "").strip()
+            if action == "REMOVE_ENTITY":
+                sid = row.get("source_entity_id")
+                try:
+                    removed_ids_in_group.add(int(sid))
+                except (TypeError, ValueError):
+                    pass
+
+        group_objs = []
+        group_ok = True
+        group_fail_reason = None
+
+        for i, row in rows:
+            action = str(row.get("action") or "").strip()
+            row_id = f"transactions:row{i}(transaction_id={tid})"
+            split, sample_id = row.get("split"), row.get("sample_id")
+            try:
+                sample_id = int(sample_id)
+            except (TypeError, ValueError):
+                skipped.append(SkippedDecision(row_id, split, sample_id, None, action,
+                                                "invalid_or_missing_sample_id"))
+                group_ok = False
+                group_fail_reason = "invalid_or_missing_sample_id"
+                continue
+
+            if action == "REMOVE_ENTITY":
+                obj, skip = validate_removal(
+                    row_id=row_id, sample_id=sample_id, split=split,
+                    document_id=row.get("document_id"), entity_by_id=entity_by_id,
+                    source_entity_id=row.get("source_entity_id"),
+                    old_label_expected=row.get("old_label"),
+                    old_start_expected=row.get("old_start"), old_end_expected=row.get("old_end"),
+                    guideline_rule_id=row.get("guideline_rule_id"),
+                    reviewer_notes=row.get("reviewer_notes"), remove_reason=row.get("remove_reason"),
+                    change_id=change_id, linked_transaction_id=tid,
+                )
+            elif action == "CORRECT_BOUNDARY":
+                obj, skip = _validate_boundary_in_transaction(
+                    row_id=row_id, sample_id=sample_id, split=split,
+                    document_id=row.get("document_id"), entity_by_id=entity_by_id,
+                    entity_index=entity_index, source_entity_id=row.get("source_entity_id"),
+                    old_label_expected=row.get("old_label"), old_start_expected=row.get("old_start"),
+                    old_end_expected=row.get("old_end"), final_start=row.get("final_start"),
+                    final_end=row.get("final_end"), final_label=row.get("final_label"),
+                    guideline_rule_id=row.get("guideline_rule_id"),
+                    reviewer_notes=row.get("reviewer_notes"), change_id=change_id,
+                    ignore_entity_ids=frozenset(removed_ids_in_group),
+                )
+            elif action == "MERGE_ENTITY":
+                raw_ids = row.get("merged_entity_ids")
+                merged_ids = []
+                if not pd.isna(raw_ids):
+                    for s in str(raw_ids).split(";"):
+                        s = s.strip()
+                        if not s:
+                            continue
+                        try:
+                            merged_ids.append(int(s))
+                        except ValueError:
+                            merged_ids.append(s)
+                fs, fe = row.get("final_start"), row.get("final_end")
+                try:
+                    fs, fe = int(fs), int(fe)
+                except (TypeError, ValueError):
+                    obj, skip = None, SkippedDecision(row_id, split, sample_id, None, action,
+                                                       "missing_resulting_span_or_label")
+                else:
+                    obj, skip = validate_and_build_merge(
+                        row_id=row_id, sample_id=sample_id, split=split,
+                        document_id=row.get("document_id"), merged_entity_ids=merged_ids,
+                        entity_by_id=entity_by_id, entity_index=entity_index,
+                        resulting_start=fs, resulting_end=fe,
+                        resulting_label=row.get("final_label"),
+                        expected_resulting_surface=row.get("expected_resulting_surface"),
+                        guideline_rule_id=row.get("guideline_rule_id"),
+                        reviewer_notes=row.get("reviewer_notes"), change_id=change_id,
+                    )
+            elif not action:
+                skipped.append(SkippedDecision(row_id, split, sample_id, None, "", "pending_review"))
+                group_ok = False
+                group_fail_reason = "pending_review"
+                continue
+            else:
+                skipped.append(SkippedDecision(row_id, split, sample_id, None, action,
+                                                f"unrecognized_transaction_action:{action}"))
+                group_ok = False
+                group_fail_reason = f"unrecognized_transaction_action:{action}"
+                continue
+
+            if obj is None:
+                skipped.append(skip)
+                group_ok = False
+                group_fail_reason = skip.reason
+                continue
+            if obj.validation_status != "valid":
+                group_ok = False
+                group_fail_reason = obj.validation_message
+            group_objs.append(obj)
+            change_id += 1
+
+        if not group_objs:
+            continue
+        if group_ok:
+            all_results.extend(group_objs)
+        else:
+            for obj in group_objs:
+                skipped.append(SkippedDecision(
+                    obj.source_workbook_row, obj.split, obj.sample_id, None,
+                    "TRANSACTION_ROLLED_BACK",
+                    f"transaction_rolled_back_due_to:{group_fail_reason}",
+                ))
+
+    return all_results, skipped
 
 
 def validate_dataset_checksums(prior_manifest: dict, current_checksums: dict) -> list:

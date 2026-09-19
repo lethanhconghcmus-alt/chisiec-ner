@@ -108,32 +108,57 @@ rules:
     status: "OPEN -- cần quyết định trước khi apply hàng loạt cho nhóm này."
 
   - id: GR-11
-    name: "Tách [triều/polity] + [niên hiệu/era] + [năm]"
+    name: "Date formula hoàn chỉnh -> whole-span DTM"
+    status: "PENDING FOCUSED AUDIT — chưa freeze, đã đảo ngược so với bản draft đầu (xem lịch sử dưới)"
     statement: >
-      Với schema flat hiện tại, khi prefix là polity/dynasty riêng biệt và
-      phần sau là era-name + số năm, PHẢI tách thành 2 entity, KHÔNG gộp
-      thành 1 span duy nhất.
+      Khi 1 chuỗi liên tục biểu thị MỘT MỐC THỜI GIAN HOÀN CHỈNH theo cấu
+      trúc [triều/chính thể/họ trị vì] + [niên hiệu] + [năm/tháng/ngày
+      hoặc số/can-chi], annotate MỘT span DTM duy nhất bao trọn cả cụm.
+      KHÔNG tách prefix thành ORG/PER/LOC riêng trong 1 date formula.
+      Đây là default policy CÓ ĐIỀU KIỆN theo ngữ cảnh — nếu prefix là
+      referent độc lập NGOÀI biểu thức thời gian (không đi liền 1 cụm
+      niên hiệu+năm ngay sau), giữ nguyên để review riêng, KHÔNG áp máy
+      móc theo regex.
     examples:
-      - raw: "明成化十八年"
-        split: "明[ORG] + 成化十八年[DTM]"
-      - raw: "大越洪德二十年"
-        split: "大越[ORG] + 洪德二十年[DTM]"
-      - raw: "洪德二十年"
-        note: "không có polity riêng đứng trước -> giữ nguyên 1 span DTM (洪德二十年), không tách."
+      - raw: "明成化十七年"
+        label: "toàn bộ DTM (không tách 明/ORG riêng)"
+      - raw: "莫大正二年"
+        label: "toàn bộ DTM"
+      - raw: "莫明德N年"
+        label: "DTM NẾU ngữ cảnh xác nhận đây là date formula (xem phát hiện phụ ở dưới — 莫明德 vốn từng bị liệt vào GR-12 nhầm là tên người)"
+      - raw: "陳 (đứng riêng, KHÔNG có niên hiệu+năm theo sau)"
+        label: "KHÔNG áp GR-11 -- đây là referent độc lập (dynasty/clan), xem GR-04"
+    history: >
+      Bản draft đầu (2026-09-20 sáng) đề xuất NGƯỢC LẠI: tách
+      ORG(明)+DTM(成化十七年). Bị đảo ngược sau khi reviewer đối chiếu bằng
+      chứng thật trong corpus: cả 4 candidate ban đầu tìm được đều nằm
+      trong CÙNG 1 document (61-Thanh-Tong-Thuan-Hoang-De-ha), label của
+      prefix dao động 3 giá trị (DTM/LOC/ORG) NGAY TRONG document đó (=
+      noise annotator, không phải phân biệt ngữ cảnh có chủ đích); phần
+      còn lại của corpus dùng whole-span DTM nhất quán và cross-document
+      (明政德十四年, 明嘉靖五年, 明萬曆二十一年, 元至元二十七年, 元和元年...);
+      dạng compositional ORG+DTM có 0 attestation trong gold hiện có.
     process: >
-      Rule chỉ áp dụng SAU KHI review từng occurrence/candidate cụ thể
-      (xem scripts/scan_dynasty_era_candidates.py, review-only, KHÔNG
-      regex mass-relabel). offset convention: inclusive end, giống toàn
-      bộ repo.
-    unresolved_counterexamples: >
-      524 candidate tìm được (113 high confidence trùng khít gold hiện
-      có, 227 medium overlap 1 phần, 184 low chỉ match raw text) -- CHƯA
-      review, xem artifacts/audit_v1/review/dynasty_era_candidates.xlsx.
+      Rule CHỈ áp dụng sau khi review từng occurrence qua
+      scripts/audit_date_formula_gr11.py (review-only, KHÔNG mass-relabel).
+      Chưa có occurrence nào được apply — status pending focused audit.
+    unresolved: >
+      524 candidate cũ từ scripts/scan_dynasty_era_candidates.py (dựa
+      trên policy GR-11 CŨ, compositional) — CẦN RE-REVIEW dưới policy
+      whole-span mới, không dùng lại kết luận cũ.
 
   - id: GR-12
     name: "Tên người"
     statement: "Tên riêng của nhân vật có thật -> PER, bất kể đứng cạnh tước hiệu hay không."
-    typical_surfaces: [日燏, 莫大正(tên người), 國瓚, 吳日慶, 吳真流]
+    typical_surfaces: [日燏, 黎輔陳, 國瓚, 吳日慶, 吳真流]
+    correction: >
+      "莫大正" ĐÃ BỊ LOẠI khỏi danh sách ví dụ (từng ghi nhầm là "tên
+      người" ở bản draft trước) -- phát hiện mới (2026-09-20, xem
+      collision case 7) cho thấy 莫大正/莫明德 trong ngữ cảnh "莫大正己未科"/
+      "莫明德己丑科" (chỉ khoa thi) thực ra là [triều Mạc]+[niên hiệu], PHẢI
+      xử lý theo GR-11 (date formula), KHÔNG phải PER. Thêm
+      "黎輔陳" (Lê Phụ Trần) làm ví dụ PER thay thế -- case merge thật đã
+      resolve (xem collision case 6).
     case_note: >
       日燏 (Trần Nhật Duật): 32 occurrence, verify thủ công TOÀN BỘ đều là
       PERSON (không có ngữ cảnh nào đọc như tổ chức) -- 20 ca gold=ORG là
