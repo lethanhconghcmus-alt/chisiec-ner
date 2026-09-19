@@ -494,3 +494,155 @@ def build_review_workbook(
             "guideline_rule_id": "",
         })
     return rows
+
+
+# ── Reviewer decision enum (mục 3, dùng chung mọi workbook deep-dive) ───────
+REVIEWER_DECISION_OPTIONS = [
+    "KEEP_GOLD",
+    "CORRECT_LABEL",
+    "CORRECT_BOUNDARY",
+    "SPLIT_ENTITY",
+    "MERGE_ENTITY",
+    "GUIDELINE_AMBIGUITY",
+    "NEEDS_DOMAIN_EXPERT",
+    "UNSURE",
+]
+
+SEMANTIC_ROLE_OPTIONS = [
+    "PERSON", "RULER", "DYNASTY", "CLAN", "POLITY", "PLACE",
+    "OFFICE", "INSTITUTION", "TIME", "OTHER",
+]
+
+
+# ── Deep-dive review: singleton anomaly vs guideline ambiguity ─────────────
+def find_singleton_anomalies(ambiguity_report: list, entities: list, min_occurrences: int = 10) -> list:
+    """
+    Nhóm A (mục 2): candidate lỗi gõ/lỗi nhãn cục bộ -- surface có
+    >= min_occurrences occurrence, và có ĐÚNG 1 occurrence mang 1 nhãn
+    khác hẳn phần còn lại (label count == 1). Đây KHÔNG khẳng định là lỗi
+    -- chỉ là candidate có xác suất lỗi gõ cao hơn (đa số áp đảo ngược lại).
+    Một surface có thể vừa xuất hiện ở đây (occurrence lẻ) vừa xuất hiện ở
+    find_guideline_ambiguities() (phần đa số bị chia 2 nhóm lớn) -- 2 hiện
+    tượng độc lập trên cùng 1 surface, ví dụ 光紹帝 (PER:15,TITLE:4,ORG:1):
+    ORG=1 là singleton anomaly, PER-vs-TITLE=15-vs-4 là guideline ambiguity.
+    """
+    entity_by_id = {e["entity_id"]: e for e in entities}
+    candidates = []
+    for r in ambiguity_report:
+        if r["total_occurrences"] < min_occurrences:
+            continue
+        for label, count in r["label_counts"].items():
+            if count != 1:
+                continue
+            eid = next(eid for eid in r["entity_ids"] if entity_by_id[eid]["label"] == label)
+            e = entity_by_id[eid]
+            majority_label, majority_count = max(
+                ((l, c) for l, c in r["label_counts"].items() if l != label),
+                key=lambda kv: kv[1],
+            )
+            candidates.append({
+                "surface": r["surface"],
+                "minority_label": label,
+                "minority_entity_id": eid,
+                "minority_split": e["split"],
+                "minority_sample_id": e["sample_id"],
+                "minority_document_id": e.get("document_id"),
+                "minority_context": e["marked_context"],
+                "majority_label": majority_label,
+                "majority_count": majority_count,
+                "total_occurrences": r["total_occurrences"],
+                "label_counts": r["label_counts"],
+            })
+    candidates.sort(key=lambda c: (-c["total_occurrences"], -c["majority_count"]))
+    return candidates
+
+
+def find_guideline_ambiguities(ambiguity_report: list, min_second_count: int = 2) -> list:
+    """
+    Nhóm B (mục 2): ambiguity mang tính hệ thống, KHÔNG coi minority là
+    lỗi -- surface có >=2 nhãn mà nhãn PHỔ BIẾN THỨ NHÌ vẫn có
+    >= min_second_count occurrence (tức không chỉ là 1 lần lẻ tẻ, mà là 1
+    cách dùng thật sự cạnh tranh với nhãn phổ biến nhất). Đây là case cần
+    RULE guideline rõ ràng, không phải sửa từng câu.
+    """
+    out = []
+    for r in ambiguity_report:
+        counts_sorted = sorted(r["label_counts"].values(), reverse=True)
+        if len(counts_sorted) >= 2 and counts_sorted[1] >= min_second_count:
+            out.append(r)
+    out.sort(key=lambda r: -r["total_occurrences"])
+    return out
+
+
+def find_adjacent_split_variants(entities: list, compound_surface: str) -> list:
+    """
+    Kiểm tra xem `compound_surface` (vd "光紹帝") có bao giờ bị TÁCH thành
+    2 entity liền kề ở 1 câu khác không (vd "光紹"+"帝" đứng sát nhau) --
+    dấu hiệu segmentation không nhất quán giữa các câu.
+    """
+    by_sentence = defaultdict(list)
+    for e in entities:
+        by_sentence[(e["split"], e["sample_id"])].append(e)
+
+    found = []
+    for (split, sid), ents in by_sentence.items():
+        ents_sorted = sorted(ents, key=lambda e: e["start"])
+        for i in range(len(ents_sorted) - 1):
+            a, b = ents_sorted[i], ents_sorted[i + 1]
+            if b["start"] == a["end"] + 1 and (a["surface"] + b["surface"]) == compound_surface:
+                found.append({
+                    "split": split, "sample_id": sid,
+                    "part1_surface": a["surface"], "part1_label": a["label"],
+                    "part2_surface": b["surface"], "part2_label": b["label"],
+                    "context": a["marked_context"],
+                })
+    return found
+
+
+def get_neighboring_entities(entities: list, target: dict, window: int = 30) -> list:
+    """Các entity KHÁC trong CÙNG câu với `target`, nằm trong bán kính
+    `window` ký tự quanh span của target (không tính chính nó)."""
+    neighbors = []
+    for e in entities:
+        if e["entity_id"] == target["entity_id"]:
+            continue
+        if e["split"] != target["split"] or e["sample_id"] != target["sample_id"]:
+            continue
+        if e["end"] < target["start"] - window or e["start"] > target["end"] + window:
+            continue
+        neighbors.append({"surface": e["surface"], "label": e["label"], "start": e["start"], "end": e["end"]})
+    return sorted(neighbors, key=lambda n: n["start"])
+
+
+def build_case_file_rows(entities: list, surface: str, context_window: int = 30) -> list:
+    """
+    Toàn bộ occurrence của 1 surface cụ thể (mục 1, 6) -- đủ field để
+    reviewer xem full context + neighboring entities + kiểm tra span,
+    KHÔNG suy diễn label/role.
+    """
+    norm = normalize_surface(surface)
+    rows = []
+    for e in entities:
+        if normalize_surface(e["surface"]) != norm:
+            continue
+        ctx_start = max(0, e["start"] - context_window)
+        ctx_end = min(len(e["text"]), e["end"] + 1 + context_window)
+        marked = f"{e['text'][ctx_start:e['start']]}【{e['surface']}】{e['text'][e['end'] + 1:ctx_end]}"
+        span_check_ok = e["text"][e["start"]: e["end"] + 1] == e["surface"]
+        neighbors = get_neighboring_entities(entities, e, window=context_window)
+        rows.append({
+            "entity_id": e["entity_id"],
+            "split": e["split"],
+            "sample_id": e["sample_id"],
+            "document_id": e.get("document_id"),
+            "gold_surface": e["surface"],
+            "gold_start": e["start"],
+            "gold_end": e["end"],
+            "gold_label": e["label"],
+            "span_check_ok": span_check_ok,
+            "full_sentence": e["text"],
+            "context_pm30": marked,
+            "neighboring_entities": "; ".join(f"{n['surface']}/{n['label']}" for n in neighbors),
+            "semantic_role_candidate": "",  # reviewer điền, KHÔNG tự suy diễn
+        })
+    return rows

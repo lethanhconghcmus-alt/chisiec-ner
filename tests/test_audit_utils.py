@@ -5,14 +5,20 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.audit_utils import (
     REVIEW_COLUMNS,
+    REVIEWER_DECISION_OPTIONS,
     build_admin_suffix_boundary_report,
     build_ambiguity_report,
+    build_case_file_rows,
     build_confusable_pair_report,
     build_merge_split_report,
     build_review_workbook,
     bio_to_entities,
     compute_priority_score,
     extract_all_spans,
+    find_adjacent_split_variants,
+    find_guideline_ambiguities,
+    find_singleton_anomalies,
+    get_neighboring_entities,
     normalize_surface,
 )
 
@@ -282,3 +288,123 @@ def test_review_workbook_respects_top_n_cap():
     boundary = build_bd(entities)
     rows = build_review_workbook(entities, [], boundary, {}, top_n=3)
     assert len(rows) == 3
+
+
+# ── find_singleton_anomalies / find_guideline_ambiguities ───────────────────
+def _mk_entities_for_surface(surface, label_sequence, text="X"):
+    entities = []
+    for i, label in enumerate(label_sequence):
+        entities.append({
+            "entity_id": i, "split": "train", "sample_id": i, "document_id": None,
+            "text": text, "start": 0, "end": len(surface) - 1, "surface": surface,
+            "label": label, "context": text, "marked_context": f"[{surface}]",
+        })
+    return entities
+
+
+def test_find_singleton_anomalies_flags_true_singleton_only():
+    # 光紹帝-like: PER x15, TITLE x4, ORG x1
+    entities = _mk_entities_for_surface("光紹帝", ["PER"] * 15 + ["TITLE"] * 4 + ["ORG"] * 1)
+    ambiguity = build_ambiguity_report(entities)
+    anomalies = find_singleton_anomalies(ambiguity, entities, min_occurrences=10)
+    assert len(anomalies) == 1
+    a = anomalies[0]
+    assert a["surface"] == "光紹帝"
+    assert a["minority_label"] == "ORG"
+    assert a["majority_label"] == "PER"
+    assert a["majority_count"] == 15
+    assert a["total_occurrences"] == 20
+
+
+def test_find_singleton_anomalies_respects_min_occurrences_threshold():
+    entities = _mk_entities_for_surface("小", ["PER"] * 5 + ["ORG"] * 1)  # total=6 < 10
+    ambiguity = build_ambiguity_report(entities)
+    anomalies = find_singleton_anomalies(ambiguity, entities, min_occurrences=10)
+    assert anomalies == []
+
+
+def test_find_singleton_anomalies_no_candidate_when_no_true_singleton():
+    # 莫氏-like: ORG 12, PER 10, LOC 1 -- LOC=1 IS a singleton (>=10 total)
+    entities = _mk_entities_for_surface("莫氏", ["ORG"] * 12 + ["PER"] * 10 + ["LOC"] * 1)
+    ambiguity = build_ambiguity_report(entities)
+    anomalies = find_singleton_anomalies(ambiguity, entities, min_occurrences=10)
+    assert len(anomalies) == 1
+    assert anomalies[0]["minority_label"] == "LOC"
+
+
+def test_find_guideline_ambiguities_requires_real_second_label():
+    # 光紹帝-like: second label TITLE=4 >= 2 -> qualifies as guideline ambiguity
+    entities = _mk_entities_for_surface("光紹帝", ["PER"] * 15 + ["TITLE"] * 4 + ["ORG"] * 1)
+    ambiguity = build_ambiguity_report(entities)
+    guideline = find_guideline_ambiguities(ambiguity, min_second_count=2)
+    assert len(guideline) == 1
+    assert guideline[0]["surface"] == "光紹帝"
+
+
+def test_find_guideline_ambiguities_excludes_pure_singleton_case():
+    # Chi co 1 nhan phu (count=1) -- khong du "canh tranh that su"
+    entities = _mk_entities_for_surface("孤例", ["PER"] * 15 + ["ORG"] * 1)
+    ambiguity = build_ambiguity_report(entities)
+    guideline = find_guideline_ambiguities(ambiguity, min_second_count=2)
+    assert guideline == []
+
+
+# ── find_adjacent_split_variants ────────────────────────────────────────────
+def test_find_adjacent_split_variants_detects_split_elsewhere():
+    tokens = list("封光紹帝位")
+    labels_whole = ["O", "B-PER", "I-PER", "I-PER", "O"]
+    tokens2 = list("尊光紹帝為號")
+    labels_split = ["O", "B-PER", "I-PER", "B-TITLE", "O", "O"]
+    splits = {"train": [(tokens, labels_whole), (tokens2, labels_split)]}
+    entities = extract_all_spans(splits)
+    found = find_adjacent_split_variants(entities, "光紹帝")
+    assert len(found) == 1
+    assert found[0]["part1_surface"] == "光紹" and found[0]["part2_surface"] == "帝"
+
+
+def test_find_adjacent_split_variants_empty_when_never_split():
+    tokens = list("封光紹帝位")
+    labels = ["O", "B-PER", "I-PER", "I-PER", "O"]
+    splits = {"train": [(tokens, labels)]}
+    entities = extract_all_spans(splits)
+    assert find_adjacent_split_variants(entities, "光紹帝") == []
+
+
+# ── get_neighboring_entities ─────────────────────────────────────────────────
+def test_get_neighboring_entities_within_window_only():
+    tokens = list("太師陳守度至化州")
+    labels = ["B-TITLE", "I-TITLE", "B-PER", "I-PER", "I-PER", "O", "B-LOC", "I-LOC"]
+    splits = {"train": [(tokens, labels)]}
+    entities = extract_all_spans(splits, context_window=30)
+    per_entity = next(e for e in entities if e["label"] == "PER")
+    neighbors = get_neighboring_entities(entities, per_entity, window=30)
+    labels_found = {n["label"] for n in neighbors}
+    assert labels_found == {"TITLE", "LOC"}
+
+    neighbors_tight = get_neighboring_entities(entities, per_entity, window=0)
+    # window=0 -> chi nhung entity sat canh (LOC cach 1 ky tu 'O' nen bi loai, TITLE sat ngay truoc)
+    assert all(n["label"] != "LOC" for n in neighbors_tight)
+
+
+# ── build_case_file_rows ────────────────────────────────────────────────────
+def test_build_case_file_rows_full_occurrence_export():
+    tokens1 = list("封光紹帝位")
+    labels1 = ["O", "B-PER", "I-PER", "I-PER", "O"]
+    tokens2 = list("追謚光紹帝為明王")
+    labels2 = ["O", "O", "B-ORG", "I-ORG", "I-ORG", "O", "O", "O"]
+    splits = {"train": [(tokens1, labels1)], "test": [(tokens2, labels2)]}
+    entities = extract_all_spans(splits)
+    rows = build_case_file_rows(entities, "光紹帝")
+    assert len(rows) == 2
+    for row in rows:
+        assert row["gold_surface"] == "光紹帝"
+        assert row["span_check_ok"] is True
+        assert row["semantic_role_candidate"] == ""
+    labels = {r["gold_label"] for r in rows}
+    assert labels == {"PER", "ORG"}
+
+
+def test_review_decision_and_semantic_role_option_lists_are_nonempty():
+    assert "KEEP_GOLD" in REVIEWER_DECISION_OPTIONS
+    assert "GUIDELINE_AMBIGUITY" in REVIEWER_DECISION_OPTIONS
+    assert len(REVIEWER_DECISION_OPTIONS) == 8
