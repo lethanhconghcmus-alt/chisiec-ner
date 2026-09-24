@@ -1,0 +1,51 @@
+# ─────────────────────────────────────────────────────────────────
+# Benchmark v2 data-centric — R1: dataset_v2_full (216→211 review-level
+# edit -> 208 written changes + 67 merges + 1 removal ap dung, quarantine
+# GIU LAI trong split). Xem data/dataset_v2/dataset_v2_full/dataset_card.md.
+# Kien truc CO DINH giong het R0 (xem R0_v1.yaml) -- CHI khac data.*.
+# ─────────────────────────────────────────────────────────────────
+project:
+  name: "benchmark_v2_R1_v2_full"
+  seed: 42
+
+data:
+  train: "data/dataset_v2/dataset_v2_full/train.txt"
+  dev:   "data/dataset_v2/dataset_v2_full/dev.txt"
+  test:  "data/dataset_v2/dataset_v2_full/test.txt"
+  max_len: 256
+  label_scheme: "bio"
+
+model:
+  method: "guwenbert_crf"
+  backbone: "SIKU-BERT/sikubert"
+  dropout: 0.1
+  pretrained_ckpt: null
+
+training:
+  epochs: 20
+  batch_size: 16
+  bert_lr: 1.0e-5
+  head_lr: 1.0e-3
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  grad_clip: 1.0
+  fp16: true
+
+early_stopping:
+  enabled: true
+  patience: 5
+  min_delta: 0.001
+
+checkpoint:
+  output_dir: "outputs/benchmark_v2/R1_v2_full"   # + /seed<N> khi chay
+  save_top_k: 1
+
+evaluation:
+  constrained_decode: true
+  constrained_scheme: "bio"
+
+logging:
+  level: "INFO"
+  use_wandb: false
+  wandb_project: "benchmark_v2"
+  wandb_entity: null

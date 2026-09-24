@@ -18,7 +18,9 @@ import argparse
 import csv
 import json
 import os
+import shutil
 import sys
+import uuid
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -27,6 +29,7 @@ import pandas as pd
 
 from src.data_utils import read_conll
 from src.audit_utils import extract_all_spans, load_source_map, _file_checksum
+from src.materialize import materialize_dataset_v2, utc_now_iso
 from src.adjudication import (
     ProposedMerge,
     ProposedRemoval,
@@ -34,6 +37,7 @@ from src.adjudication import (
     process_boundary_split_fillin,
     process_collision_candidates,
     process_deepdive_occurrences,
+    process_gr11_date_formula_candidates,
     process_guideline_ambiguities_surface_level,
     process_review_transactions,
     process_singleton_anomalies,
@@ -59,9 +63,30 @@ def main():
                      help="File transaction (vd yushi_gudu_transaction.xlsx) — mỗi dòng 1 action, "
                           "cột transaction_id nhóm action commit atomic. Có thể truyền nhiều lần. "
                           "CHỈ truyền khi reviewer đã điền đủ field bắt buộc.")
+    ap.add_argument("--gr11-candidates", default=None,
+                     help="gr11_date_formula_candidates.xlsx (scripts/audit_date_formula_gr11.py) "
+                          "đã review đủ reviewer_decision. GR-11b (dynasty_era_candidates.xlsx, "
+                          "scan_dynasty_era_candidates.py, policy cũ) KHÔNG có flag riêng -- "
+                          "cố tình deferred, không đọc trong script này.")
     ap.add_argument("--out-dir", default="artifacts/adjudication_v2_dry_run")
     ap.add_argument("--apply", action="store_true",
                      help="BẮT BUỘC truyền tường minh để ghi dataset_v2 thật. Mặc định KHÔNG có = dry-run.")
+    ap.add_argument("--force-overwrite", action="store_true",
+                     help="CHỈ có tác dụng cùng --apply. Cho phép overwrite --out-dir đã tồn tại "
+                          "(bản cũ được rename sang backup timestamped, KHÔNG xoá).")
+    ap.add_argument("--expect-changes", type=int, default=None,
+                     help="Contract gate (chỉ dùng cùng --apply): số valid direct changes ky vong "
+                          "(review-level, truoc materializer dedup). Neu khac -> tu choi apply.")
+    ap.add_argument("--expect-merges", type=int, default=None,
+                     help="Contract gate: so valid merges ky vong (review-level).")
+    ap.add_argument("--expect-removals", type=int, default=None,
+                     help="Contract gate: so valid removals ky vong.")
+    ap.add_argument("--expect-quarantine-rows", type=int, default=None,
+                     help="Contract gate: so quarantine DECISION ROW ky vong (khong phai unique sample).")
+    ap.add_argument("--expect-quarantine-unique", type=int, default=None,
+                     help="Contract gate: so quarantine UNIQUE sample_id ky vong (se bi loai khoi v2_clean).")
+    ap.add_argument("--expect-total-sentences", type=int, default=None,
+                     help="Contract gate: tong so cau (train+dev+test) ky vong trong dataset_v2_full.")
     args = ap.parse_args()
     dry_run = not args.apply
 
@@ -76,6 +101,11 @@ def main():
         "dev": _file_checksum(args.dev),
         "test": _file_checksum(args.test),
     }
+    # GR-11b (dynasty_era_candidates.xlsx, scan_dynasty_era_candidates.py, policy
+    # GR-11 CU) khong co CLI flag rieng va khong bao gio duoc doc trong script nay
+    # -- checksum truoc/sau chi de assert tuong minh "thuc su khong dong vao".
+    gr11b_path = os.path.join(args.review_dir, "dynasty_era_candidates.xlsx")
+    gr11b_checksum_before = _file_checksum(gr11b_path) if os.path.exists(gr11b_path) else None
     source_map = load_source_map(args.source_map)
     entities = extract_all_spans(splits_data, source_map, context_window=20)
     entity_index = build_entity_index(entities)
@@ -96,7 +126,7 @@ def main():
     singleton_path = os.path.join(args.review_dir, "review_priority_singleton_anomalies.xlsx")
     guideline_path = os.path.join(args.review_dir, "review_guideline_ambiguities.xlsx")
 
-    all_proposed, all_skipped = [], []
+    all_proposed, all_skipped, all_quarantined = [], [], []
 
     if os.path.exists(singleton_path):
         df_singleton = pd.read_excel(singleton_path)
@@ -171,6 +201,18 @@ def main():
         else:
             global_errors.append(f"Khong tim thay {tx_path}")
 
+    if args.gr11_candidates:
+        if os.path.exists(args.gr11_candidates):
+            df_gr11 = pd.read_excel(args.gr11_candidates)
+            proposed, skipped, quarantined = process_gr11_date_formula_candidates(
+                df_gr11, entities, entity_index, change_id_start=len(all_proposed),
+            )
+            all_proposed.extend(proposed)
+            all_skipped.extend(skipped)
+            all_quarantined.extend(quarantined)
+        else:
+            global_errors.append(f"Khong tim thay {args.gr11_candidates}")
+
     # ── 3. Phân loại valid / error (tách riêng ProposedChange vs ProposedMerge
     # vs ProposedRemoval -- schema khác nhau, không gộp chung 1 CSV) ──────
     all_removals = [c for c in all_proposed if isinstance(c, ProposedRemoval)]
@@ -185,19 +227,27 @@ def main():
     valid_merges = [m for m in all_merges if m.validation_status == "valid"]
     error_merges = [m for m in all_merges if m.validation_status != "valid"]
 
-    # ── 4. Ghi output (luôn ghi, kể cả dry-run) ─────────────────────────
-    os.makedirs(args.out_dir, exist_ok=True)
+    # ── 4. Ghi report (dry-run: vao thang --out-dir; apply: vao 1 thu muc
+    # tam rieng CHI de kiem tra validation_errors truoc khi materialize --
+    # --out-dir khi --apply la DICH CUOI CUNG cua dataset that, KHONG duoc
+    # pre-tao no o day keo apply-gate ben duoi luon thay "da ton tai") ────
+    if args.apply:
+        import tempfile
+        report_out_dir = tempfile.mkdtemp(prefix="adjudication_apply_prevalidate_")
+    else:
+        report_out_dir = args.out_dir
+    os.makedirs(report_out_dir, exist_ok=True)
 
-    with open(os.path.join(args.out_dir, "proposed_dataset_diff.jsonl"), "w", encoding="utf-8") as f:
+    with open(os.path.join(report_out_dir, "proposed_dataset_diff.jsonl"), "w", encoding="utf-8") as f:
         for c in valid_changes:
             f.write(json.dumps(c.to_row(), ensure_ascii=False) + "\n")
 
-    with open(os.path.join(args.out_dir, "proposed_merges_diff.jsonl"), "w", encoding="utf-8") as f:
+    with open(os.path.join(report_out_dir, "proposed_merges_diff.jsonl"), "w", encoding="utf-8") as f:
         for m in valid_merges:
             f.write(json.dumps(m.to_row(), ensure_ascii=False) + "\n")
 
     changelog_rows = [c.to_row() for c in all_changes]
-    with open(os.path.join(args.out_dir, "changelog_draft.csv"), "w", newline="", encoding="utf-8-sig") as f:
+    with open(os.path.join(report_out_dir, "changelog_draft.csv"), "w", newline="", encoding="utf-8-sig") as f:
         if changelog_rows:
             writer = csv.DictWriter(f, fieldnames=list(changelog_rows[0].keys()))
             writer.writeheader()
@@ -205,7 +255,7 @@ def main():
                 writer.writerow(r)
 
     merge_rows = [m.to_row() for m in all_merges]
-    with open(os.path.join(args.out_dir, "merge_changelog_draft.csv"), "w", newline="", encoding="utf-8-sig") as f:
+    with open(os.path.join(report_out_dir, "merge_changelog_draft.csv"), "w", newline="", encoding="utf-8-sig") as f:
         if merge_rows:
             writer = csv.DictWriter(f, fieldnames=list(merge_rows[0].keys()))
             writer.writeheader()
@@ -213,14 +263,14 @@ def main():
                 writer.writerow(r)
 
     removal_rows = [r.to_row() for r in all_removals]
-    with open(os.path.join(args.out_dir, "removal_changelog_draft.csv"), "w", newline="", encoding="utf-8-sig") as f:
+    with open(os.path.join(report_out_dir, "removal_changelog_draft.csv"), "w", newline="", encoding="utf-8-sig") as f:
         if removal_rows:
             writer = csv.DictWriter(f, fieldnames=list(removal_rows[0].keys()))
             writer.writeheader()
             for r in removal_rows:
                 writer.writerow(r)
 
-    with open(os.path.join(args.out_dir, "skipped_decisions.csv"), "w", newline="", encoding="utf-8-sig") as f:
+    with open(os.path.join(report_out_dir, "skipped_decisions.csv"), "w", newline="", encoding="utf-8-sig") as f:
         fieldnames = ["source_workbook_row", "split", "sample_id", "surface", "reviewer_decision", "reason"]
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
@@ -231,7 +281,18 @@ def main():
                 "reviewer_decision": s.reviewer_decision, "reason": s.reason,
             })
 
-    with open(os.path.join(args.out_dir, "validation_errors.csv"), "w", newline="", encoding="utf-8-sig") as f:
+    with open(os.path.join(report_out_dir, "quarantine_decisions.csv"), "w", newline="", encoding="utf-8-sig") as f:
+        fieldnames = ["source_workbook_row", "split", "sample_id", "surface", "reviewer_decision", "reason"]
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for q in all_quarantined:
+            writer.writerow({
+                "source_workbook_row": q.source_workbook_row, "split": q.split,
+                "sample_id": q.sample_id, "surface": q.surface,
+                "reviewer_decision": q.reviewer_decision, "reason": q.reason,
+            })
+
+    with open(os.path.join(report_out_dir, "validation_errors.csv"), "w", newline="", encoding="utf-8-sig") as f:
         fieldnames = ["change_id", "split", "sample_id", "surface_old_label", "new_label",
                       "source_workbook_row", "validation_message"]
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -283,6 +344,7 @@ def main():
         f"- Proposed removals (valid, sẵn sàng apply): **{len(valid_removals)}**",
         f"- Proposed removals (validation error, KHÔNG áp): **{len(error_removals)}**",
         f"- Skipped decisions (theo policy, không cố gắng apply): **{len(all_skipped)}**",
+        f"- Quarantined (SKIP_UNANNOTATED_SAMPLE, chờ quarantine_v2): **{len(all_quarantined)}**",
         f"- Global validation errors: **{len(global_errors)}**",
         "",
         "## Global errors",
@@ -313,17 +375,133 @@ def main():
                 f"{m.resulting_label}[{m.resulting_span[0]}-{m.resulting_span[1]}] "
                 f"(rule={m.rule_id})"
             )
-    with open(os.path.join(args.out_dir, "summary.md"), "w", encoding="utf-8") as f:
+    with open(os.path.join(report_out_dir, "summary.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(summary_lines))
+
+    if args.apply:
+        # report_out_dir chi la scratch de kiem tra validation truoc khi
+        # materialize -- changelog that nam trong final_out_dir/changelog/.
+        shutil.rmtree(report_out_dir, ignore_errors=True)
 
     # ── 5. Chỉ ghi dataset_v2 thật nếu --apply ──────────────────────────
     if args.apply:
-        raise SystemExit(
-            "--apply duoc truyen nhung script nay CHUA implement buoc ghi "
-            "dataset_v2 that (materialize) -- theo dung yeu cau hien tai "
-            "chi lam den muc dry-run + validate. Dung lai o day, KHONG ghi "
-            "gi vao data/dataset_v2/."
+        if error_changes or error_merges or error_removals or global_errors:
+            print("[APPLY] TU CHOI: van con validation error hoac global error, "
+                  "sua het roi chay lai dry-run truoc.", file=sys.stderr)
+            print(f"  error_changes={len(error_changes)} error_merges={len(error_merges)} "
+                  f"error_removals={len(error_removals)} global_errors={len(global_errors)}", file=sys.stderr)
+            raise SystemExit(1)
+
+        from src.materialize import quarantine_sample_ids_by_split
+        quarantine_ids_preview = quarantine_sample_ids_by_split(all_quarantined)
+        quarantine_unique_preview = sum(len(v) for v in quarantine_ids_preview.values())
+        contract_checks = [
+            ("valid direct changes", args.expect_changes, len(valid_changes)),
+            ("valid merges", args.expect_merges, len(valid_merges)),
+            ("valid removals", args.expect_removals, len(valid_removals)),
+            ("quarantine decision rows", args.expect_quarantine_rows, len(all_quarantined)),
+            ("quarantine unique records", args.expect_quarantine_unique, quarantine_unique_preview),
+        ]
+        contract_failures = [f"{name}: expected {exp}, got {actual}"
+                              for name, exp, actual in contract_checks if exp is not None and exp != actual]
+        if contract_failures:
+            print("[APPLY] TU CHOI: contract gate KHONG khop so lieu da duoc duyet -- "
+                  "dataset hoac review workbook co the da doi kem tu luc duyet baseline.", file=sys.stderr)
+            for f_ in contract_failures:
+                print(f"  - {f_}", file=sys.stderr)
+            raise SystemExit(1)
+
+        final_out_dir = os.path.abspath(args.out_dir)
+        if os.path.exists(final_out_dir):
+            if not args.force_overwrite:
+                print(f"[APPLY] TU CHOI: --out-dir {final_out_dir} da ton tai. "
+                      f"Truyen --force-overwrite neu muon ghi de (ban cu se duoc "
+                      f"rename sang backup timestamped, KHONG bi xoa).", file=sys.stderr)
+                raise SystemExit(1)
+            ts_backup = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            backup_dir = f"{final_out_dir}.backup_{ts_backup}"
+            shutil.move(final_out_dir, backup_dir)
+            print(f"[APPLY] Da rename output cu sang backup: {backup_dir}")
+
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        temp_root = os.path.join(
+            os.path.dirname(final_out_dir) or ".",
+            f".{os.path.basename(final_out_dir)}_tmp_{ts}_{uuid.uuid4().hex[:8]}",
         )
+
+        applied_review_workbooks = []
+        for p in [singleton_path, guideline_path, args.boundary_split_fillin,
+                  args.collision_candidates, args.gr11_candidates, *args.transactions]:
+            if p and os.path.exists(p):
+                applied_review_workbooks.append({"path": p, "checksum_md5": _file_checksum(p)})
+
+        materialization_config = {
+            "cli_args": vars(args), "generated_at_utc": utc_now_iso(),
+            "dry_run_valid_counts": {
+                "changes": len(valid_changes), "merges": len(valid_merges),
+                "removals": len(valid_removals), "skipped": len(all_skipped),
+                "quarantined": len(all_quarantined),
+            },
+        }
+        repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        guideline_source_yaml = os.path.join(repo_dir, "docs", "guideline_v2.0_draft.yaml")
+
+        print(f"[APPLY] Ghi vao temp dir: {temp_root}")
+        success, mat_errors, report = materialize_dataset_v2(
+            temp_root=temp_root, splits_v1=splits_data, source_map=source_map,
+            valid_changes=valid_changes, valid_merges=valid_merges, valid_removals=valid_removals,
+            all_skipped=all_skipped, all_quarantined=all_quarantined,
+            materialization_config=materialization_config, repo_dir=repo_dir,
+            audit_manifest_path=args.audit_manifest, current_checksums=current_checksums,
+            applied_review_workbooks=applied_review_workbooks,
+            guideline_source_yaml=guideline_source_yaml,
+            expected_quarantine_unique=args.expect_quarantine_unique,
+            expected_total_sentences=args.expect_total_sentences,
+        )
+
+        if not success:
+            print("[APPLY] THAT BAI post-write validation -- KHONG rename temp thanh output cuoi. "
+                  "Temp dir GIU LAI de debug:", temp_root, file=sys.stderr)
+            for e in mat_errors[:50]:
+                print(f"  - {e}", file=sys.stderr)
+            raise SystemExit(1)
+
+        # ── Immutability guard cuoi cung (source v1 + GR-11b deferred) ────
+        from src.materialize import verify_source_files_unchanged
+        immut_errors = verify_source_files_unchanged(
+            {"train": args.train, "dev": args.dev, "test": args.test}, current_checksums,
+        )
+        if os.path.exists(gr11b_path):
+            gr11b_after = _file_checksum(gr11b_path)
+            if gr11b_checksum_before is not None and gr11b_after != gr11b_checksum_before:
+                immut_errors.append(
+                    f"GR-11b file {gr11b_path} DA BI THAY DOI sau materialize "
+                    f"({gr11b_checksum_before} -> {gr11b_after})"
+                )
+        if immut_errors:
+            print("[APPLY] THAT BAI immutability guard (source v1 hoac GR-11b bi doi) -- "
+                  "KHONG rename temp thanh output cuoi. Temp dir GIU LAI de debug:",
+                  temp_root, file=sys.stderr)
+            for e in immut_errors:
+                print(f"  - {e}", file=sys.stderr)
+            raise SystemExit(1)
+
+        os.rename(temp_root, final_out_dir)
+        with open(os.path.join(final_out_dir, "MATERIALIZATION_SUCCESS.json"), "w", encoding="utf-8") as f:
+            json.dump({
+                "success": True, "materialized_at_utc": utc_now_iso(),
+                "final_out_dir": final_out_dir, "report_summary": {
+                    "record_counts": report.get("record_counts"),
+                    "applied_counts": report.get("applied_counts"),
+                    "quarantine_decision_rows_total": report.get("quarantine_decision_rows_total"),
+                    "quarantined_unique_records_total": report.get("quarantined_unique_records_total"),
+                },
+            }, f, ensure_ascii=False, indent=2)
+
+        print(f"[APPLY] THANH CONG. Output final: {final_out_dir}")
+        print(f"[APPLY] Applied changes={len(valid_changes)} merges={len(valid_merges)} "
+              f"removals={len(valid_removals)} quarantined={len(all_quarantined)}")
+        return
 
     print(f"[DRY RUN] Valid proposed changes: {len(valid_changes)}")
     print(f"[DRY RUN] Validation errors (changes): {len(error_changes)}")
@@ -332,6 +510,7 @@ def main():
     print(f"[DRY RUN] Valid proposed removals: {len(valid_removals)}")
     print(f"[DRY RUN] Validation errors (removals): {len(error_removals)}")
     print(f"[DRY RUN] Skipped decisions: {len(all_skipped)}")
+    print(f"[DRY RUN] Quarantined (SKIP_UNANNOTATED_SAMPLE): {len(all_quarantined)}")
     print(f"[DRY RUN] Global errors: {len(global_errors)}")
     print(f"Output -> {args.out_dir}/")
     print("\nDecision x reason breakdown:")

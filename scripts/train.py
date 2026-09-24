@@ -17,8 +17,10 @@ from src.data_utils import read_conll, build_label_map, make_dataloader, validat
 from src.models     import build_model, MODEL_BACKBONE
 from src.trainer    import Trainer
 from src.evaluator  import Evaluator
+from src.evaluator_extended import extended_test_report
 from src.utils      import set_seed, get_logger, add_file_handler, save_json
 from src.bioes_utils import build_bioes_label_map, convert_dataset_bio_to_bioes
+from src.audit_utils import _file_checksum, bio_to_entities
 
 logger = get_logger(__name__)
 
@@ -55,6 +57,8 @@ def main():
     # ── Logging ───────────────────────────────────────────────────
     add_file_handler(logger, os.path.join(output_dir, "train.log"))
     logger.info(f"\nConfig:\n{OmegaConf.to_yaml(cfg)}")
+    with open(os.path.join(output_dir, "resolved_config.yaml"), "w", encoding="utf-8") as f:
+        f.write(OmegaConf.to_yaml(cfg))
 
     # ── Reproducibility ───────────────────────────────────────────
     set_seed(cfg.project.seed)
@@ -67,6 +71,22 @@ def main():
     validate_data(train_data, "train")
     validate_data(dev_data,   "dev")
     validate_data(test_data,  "test")
+
+    # ── Dataset manifest checksum + sentence/entity counts (mục B) ──────────
+    dataset_manifest = {
+        "checksums_md5": {
+            "train": _file_checksum(cfg.data.train),
+            "dev": _file_checksum(cfg.data.dev),
+            "test": _file_checksum(cfg.data.test),
+        },
+        "paths": {"train": cfg.data.train, "dev": cfg.data.dev, "test": cfg.data.test},
+    }
+    for name, data in (("train", train_data), ("dev", dev_data), ("test", test_data)):
+        n_entities = sum(len(bio_to_entities(toks, labs)) for toks, labs in data)
+        dataset_manifest[f"n_sentences_{name}"] = len(data)
+        dataset_manifest[f"n_entities_{name}"] = n_entities
+        logger.info(f"[{name}] {len(data)} sentences, {n_entities} entities")
+    save_json(dataset_manifest, os.path.join(output_dir, "dataset_manifest.json"))
 
     # ── label_scheme (mục A) ─────────────────────────────────────────────
     # Mặc định "bio" = hành vi gốc, KHÔNG đổi gì (M0 baseline). "bioes":
@@ -138,8 +158,39 @@ def main():
     # ── WandB ─────────────────────────────────────────────────────
     wandb_run = setup_wandb(cfg)
 
+    # ── Constrained BIO decode (opt-in, mac dinh TAT -- xem
+    # artifacts/benchmark_v2/bio_decoding_policy.md). CHI benchmark_v2
+    # configs (R0/R1/R2) bat evaluation.constrained_decode=true; moi
+    # experiment khac (M0/M1/M2/DAPT/...) KHONG truyen field nay -> hanh vi
+    # CU (raw unconstrained decode) giu nguyen 100%, khong doi reproducibility.
+    constrained_decode = bool(OmegaConf.select(cfg, "evaluation.constrained_decode", default=False))
+    constrained_scheme = str(OmegaConf.select(cfg, "evaluation.constrained_scheme", default="bio"))
+    decode_policy = "constrained" if constrained_decode else "raw_unconstrained"
+    logger.info(f"Decode policy: {decode_policy}"
+                + (f" (scheme={constrained_scheme})" if constrained_decode else ""))
+
+    # ── Log seed/batch/steps (yeu cau: seed, dataset manifest checksum,
+    # batch/effective batch size, steps/epoch, total planned steps, decode
+    # policy -- KHONG co gradient accumulation/multi-device trong pipeline
+    # nay nen effective batch size == batch size, xem src/trainer.py) ─────
+    import math
+    steps_per_epoch = math.ceil(len(train_data) / bs)
+    total_planned_steps = steps_per_epoch * cfg.training.epochs
+    run_manifest = {
+        "seed": cfg.project.seed,
+        "dataset_checksums_md5": dataset_manifest["checksums_md5"],
+        "batch_size": bs, "effective_batch_size": bs, "gradient_accumulation_steps": 1,
+        "steps_per_epoch": steps_per_epoch, "max_epochs": cfg.training.epochs,
+        "total_planned_steps": total_planned_steps,
+        "decode_policy": decode_policy, "constrained_scheme": constrained_scheme if constrained_decode else None,
+    }
+    logger.info(f"Run manifest: {run_manifest}")
+    save_json(run_manifest, os.path.join(output_dir, "run_manifest.json"))
+
     # ── Train ─────────────────────────────────────────────────────
-    evaluator = Evaluator(model, id2label, device, output_dir, scheme=eval_scheme)
+    evaluator = Evaluator(model, id2label, device, output_dir, scheme=eval_scheme,
+                           use_constrained_decode=constrained_decode, label2id=label2id,
+                           constrained_scheme=constrained_scheme)
     trainer   = Trainer(model, cfg, output_dir, wandb_run)
     train_res = trainer.train(train_loader, dev_loader, evaluator)
 
@@ -153,6 +204,30 @@ def main():
     evaluator.confusion_matrix(test_loader,  split="test")
     evaluator.error_analysis(test_loader, test_data, split="test")
 
+    # ── Extended report (mục C: seen/unseen, partial-span/boundary,
+    # ORG<->TITLE confusion, invalid BIO count, GR-11 DTM examples) --
+    # CHỈ chạy khi label_scheme=bio (evaluator_extended dùng bio_to_entities,
+    # KHÔNG hỗ trợ BIOES) và max_len đủ lớn để không cắt câu (assert bên
+    # trong extended_test_report tự chặn nếu lệch số câu).
+    extended_report = None
+    if label_scheme == "bio":
+        extended_report = extended_test_report(
+            model, id2label, device, output_dir, test_loader, test_data, train_data, split="test",
+            constrained_crf=evaluator.constrained_crf if constrained_decode else None,
+        )
+    else:
+        logger.warning("label_scheme != 'bio' -- BỎ QUA extended_test_report (chỉ hỗ trợ BIO).")
+
+    if extended_report is not None:
+        bv = extended_report["bio_violations"]
+        logger.info(
+            f"BIO violations -- raw={bv['raw_total_violations']} "
+            f"(sentences={bv['raw_sentences_with_violations']}) | "
+            f"constrained={bv['constrained_total_violations']} "
+            f"(sentences={bv['constrained_sentences_with_violations']}) | "
+            f"decode_policy={extended_report['decode_policy']}"
+        )
+
     # ── Save final results ────────────────────────────────────────
     from src.utils import count_parameters
     train_time = sum(h.get("elapsed", 0.0) for h in train_res.get("history", []))
@@ -164,6 +239,15 @@ def main():
         **train_res,
         "test_f1":       test_res["f1"],
         "test_report":   test_res["report"],
+        "dataset_manifest": dataset_manifest,
+        "run_manifest": run_manifest,
+        "extended_report_summary": None if extended_report is None else {
+            "decode_policy": extended_report["decode_policy"],
+            "span_category_counts": extended_report["span_category_counts"],
+            "org_title_confusion": extended_report["org_title_confusion"],
+            "seen_unseen_f1": extended_report["seen_unseen_f1"],
+            "bio_violations": extended_report["bio_violations"],
+        },
         "total_params":  count_parameters(model),
         "train_time":    round(train_time, 1),
     }

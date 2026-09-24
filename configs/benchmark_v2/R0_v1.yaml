@@ -1,0 +1,62 @@
+# ─────────────────────────────────────────────────────────────────
+# Benchmark v2 data-centric — R0: dataset_v1 (baseline, chưa sửa gì)
+# Architecture CỐ ĐỊNH cho cả R0/R1/R2: SikuBERT + Linear + CRF + BIO
+# (method="guwenbert_crf" là tên KIẾN TRÚC trong codebase, backbone thật
+# override bằng model.backbone bên dưới — KHÔNG dùng BIOES/boundary heads/
+# DAPT/gazetteer/GlobalPointer/LLM/augmentation).
+#
+# project.seed override lúc chạy: py scripts/train.py --config-name ...
+#   project.seed=42|43|44 (xem README lệnh chạy trong
+#   artifacts/benchmark_v2/experiment_plan.md).
+# ─────────────────────────────────────────────────────────────────
+project:
+  name: "benchmark_v2_R0_v1"
+  seed: 42
+
+data:
+  train: "D:\\bio_source\\kaggle_crf_boundary_m2v2_kernel_output\\chisiec-ner\\data\\dvsk\\dvsk_train.txt"
+  dev:   "D:\\bio_source\\kaggle_crf_boundary_m2v2_kernel_output\\chisiec-ner\\data\\dvsk\\dvsk_dev.txt"
+  test:  "D:\\bio_source\\kaggle_crf_boundary_m2v2_kernel_output\\chisiec-ner\\data\\dvsk\\dvsk_test.txt"
+  max_len: 256
+  label_scheme: "bio"   # KHONG BIOES
+
+model:
+  method: "guwenbert_crf"   # kien truc = Linear + CRF; KHONG boundary heads
+  backbone: "SIKU-BERT/sikubert"
+  dropout: 0.1
+  pretrained_ckpt: null      # KHONG DAPT/MLM tiep tuc pretrain
+
+training:
+  epochs: 20
+  batch_size: 16
+  bert_lr: 1.0e-5      # encoder_lr
+  head_lr: 1.0e-3      # head_crf_lr
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  grad_clip: 1.0
+  fp16: true            # tu dong tat neu chay CPU (xem src/trainer.py)
+
+early_stopping:
+  enabled: true
+  patience: 5
+  min_delta: 0.001
+
+checkpoint:
+  output_dir: "outputs/benchmark_v2/R0_v1"   # + /seed<N> khi chay (xem plan)
+  save_top_k: 1
+
+# BIO-constrained Viterbi decode o DECODE-TIME (khong dung cham training
+# loss/optimizer) -- xem artifacts/benchmark_v2/bio_decoding_policy.md.
+# Dung IDENTICAL cho R0/R1/R2. Opt-in rieng (default False cho moi
+# experiment khac trong repo, xem src/evaluator.py).
+evaluation:
+  constrained_decode: true
+  constrained_scheme: "bio"
+
+logging:
+  level: "INFO"
+  use_wandb: false
+  wandb_project: "benchmark_v2"
+  wandb_entity: null
+
+# KHONG khai bao gazetteer: -> mac dinh tat trong scripts/train.py.

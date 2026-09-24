@@ -20,6 +20,7 @@ Nguyên tắc cứng (theo yêu cầu, KHÔNG thương lượng):
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Optional
@@ -903,6 +904,224 @@ def process_review_transactions(df: pd.DataFrame, entities: list, entity_index: 
                 ))
 
     return all_results, skipped
+
+
+# ── GR-11 whole-span DTM (gr11_date_formula_candidates.xlsx) ──────────────
+GR11_NEVER_APPLY_DECISIONS = {"GUIDELINE_AMBIGUITY", "NEEDS_DOMAIN_EXPERT", "REJECT_CANDIDATE"}
+# ADD_ENTITY nam ngoai pham vi vong nay (chi CORRECT_LABEL/CORRECT_BOUNDARY/
+# MERGE_ENTITY duoc explicit yeu cau apply) -- 2 dong, de sang vong sau.
+GR11_NOT_YET_IMPLEMENTED_DECISIONS = {"ADD_ENTITY"}
+GR11_APPLY_DECISIONS = {"CORRECT_BOUNDARY", "MERGE_ENTITY"}
+
+_ORIG_ENTITY_RE = re.compile(r"^(.*)/([A-Za-z]+)\[(\d+)-(\d+)\]$")
+
+
+def _parse_gr11_original_entities(raw) -> Optional[list]:
+    """'surface/LABEL[start-end]; surface/LABEL[start-end]' -> list[(surface,
+    label, start, end)]. Trả None nếu chuỗi không rỗng nhưng không parse
+    được (khác với rỗng/NaN -> list rỗng), để phân biệt lỗi format với
+    'không có entity nào' (case này không nên xảy ra khi decision cần apply)."""
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)) or not str(raw).strip():
+        return []
+    out = []
+    for part in str(raw).split(";"):
+        part = part.strip()
+        if not part:
+            continue
+        m = _ORIG_ENTITY_RE.match(part)
+        if not m:
+            return None
+        surface, label, start, end = m.groups()
+        out.append((surface, label, int(start), int(end)))
+    return out
+
+
+def _parse_span_pair(raw) -> Optional[tuple]:
+    """'158-162' -> (158, 162), None nếu không parse được."""
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)) or not str(raw).strip():
+        return None
+    parts = str(raw).split("-")
+    if len(parts) != 2:
+        return None
+    try:
+        return int(parts[0]), int(parts[1])
+    except ValueError:
+        return None
+
+
+def process_gr11_date_formula_candidates(df: pd.DataFrame, entities: list, entity_index: dict,
+                                          change_id_start: int = 0) -> tuple:
+    """
+    gr11_date_formula_candidates.xlsx (scripts/audit_date_formula_gr11.py,
+    615 candidate đã review đủ). Theo policy GR-11 đã chốt (docs/
+    guideline_v2.0_draft.yaml): 1+ entity gold hiện có bị THAY hoàn toàn
+    bằng MỘT span DTM duy nhất (final_span/final_label) -- final_span
+    KHÔNG bắt buộc trùng min/max các entity nguồn (có thể mở rộng để nuốt
+    ký tự chưa gắn nhãn, hoặc bỏ hẳn 1 entity nguồn ra ngoài, xem case
+    candidate_id=349). Vì vậy KHÔNG dùng validate_and_build_merge (đòi hỏi
+    resulting_span khớp chính xác min/max nguồn) -- validate riêng ở đây.
+
+    Quyết định theo policy hiện tại (KHÔNG thương lượng trong lần chạy này):
+    - CORRECT_BOUNDARY / MERGE_ENTITY: apply (n_orig==1 -> ProposedChange,
+      n_orig>=2 -> ProposedMerge, cùng 1 cơ chế "xoá hết nguồn, thêm 1 span
+      mới", chỉ khác schema output theo quy ước sẵn của pipeline).
+    - SKIP_UNANNOTATED_SAMPLE: KHÔNG apply, KHÔNG log như skipped thường --
+      trả riêng trong `quarantined` (list[SkippedDecision]) để caller ghi
+      quarantine_v2 (sample thiếu annotation nền, không phải lỗi review).
+    - GUIDELINE_AMBIGUITY/NEEDS_DOMAIN_EXPERT/REJECT_CANDIDATE: never-apply,
+      log skipped với lý do rõ decision.
+    - ADD_ENTITY: ngoài phạm vi vòng này (chỉ 2 dòng), log skipped.
+    - KEEP_GOLD/rỗng: no-op, log skipped.
+    """
+    proposed, skipped, quarantined = [], [], []
+    change_id = change_id_start
+    # (split, sample_id, candidate_span) -> (decision, final_span, final_label) cua
+    # dong DAU TIEN gap key nay -- audit_date_formula_gr11.py quet 2 lan (forced_target
+    # rieng + pattern tong quat) nen 1 candidate that co the xuat hien 2 dong trung
+    # (khac candidate_id/forced_target, CUNG split/sample/span/final_span/final_label/
+    # decision). Neu khong dedupe, apply_ops_to_splits se ghi 2 lan len CUNG 1 span
+    # -> cross-op collision that (da bat duoc thuc te tren corpus that: 13/27 nhom
+    # trung CORRECT_BOUNDARY/MERGE_ENTITY gay loi nay). Dong trung THAT SU giong
+    # nhau -> giu dong dau (van apply binh thuong qua vong lap), dong sau bi log vao
+    # skipped (KHONG apply 2 lan). Neu 2 dong "trung key" nhung decision/final_span/
+    # final_label KHAC NHAU -> conflict that (hien tai 0 case trong corpus da audit,
+    # xem inspect_dups3.py 27/27 nhom nhat quan) -- dong dau van theo huong xu ly
+    # binh thuong (co the da apply), dong SAU bi skip voi ly do
+    # "CONFLICTING" ro rang de nguoi review phat hien qua changelog, KHONG tu suy
+    # doan chon ben nao dung.
+    seen_candidates = {}
+
+    for i, row in df.iterrows():
+        decision = str(row.get("reviewer_decision") or "").strip()
+        candidate_id = row.get("candidate_id")
+        wb_row_id = f"gr11_date_formula_candidates:row{i}(candidate_id={candidate_id})"
+        split = row.get("split")
+        surface = row.get("candidate_surface")
+
+        try:
+            sample_id = int(row.get("sample_id"))
+        except (TypeError, ValueError):
+            skipped.append(SkippedDecision(wb_row_id, split, row.get("sample_id"), surface,
+                                            decision, "invalid_or_missing_sample_id"))
+            continue
+
+        dedup_key = (split, sample_id, str(row.get("candidate_span")))
+        dedup_sig = (decision, str(row.get("final_span")), str(row.get("final_label")))
+        if dedup_key in seen_candidates:
+            prior_sig, prior_row_id = seen_candidates[dedup_key]
+            if prior_sig == dedup_sig:
+                skipped.append(SkippedDecision(wb_row_id, split, sample_id, surface, decision,
+                                                f"duplicate_candidate_row_same_decision_as:{prior_row_id}"))
+            else:
+                skipped.append(SkippedDecision(wb_row_id, split, sample_id, surface, decision,
+                                                f"duplicate_candidate_row_CONFLICTING_decision_vs:{prior_row_id}"))
+            continue
+        seen_candidates[dedup_key] = (dedup_sig, wb_row_id)
+
+        if not decision or decision == "KEEP_GOLD":
+            reason = "no_change_needed_or_empty" if not decision else "no_change_needed_keep_gold"
+            skipped.append(SkippedDecision(wb_row_id, split, sample_id, surface, decision, reason))
+            continue
+
+        if decision == "SKIP_UNANNOTATED_SAMPLE":
+            quarantined.append(SkippedDecision(wb_row_id, split, sample_id, surface, decision,
+                                                "quarantined_unannotated_sample"))
+            continue
+
+        if decision in GR11_NEVER_APPLY_DECISIONS:
+            skipped.append(SkippedDecision(wb_row_id, split, sample_id, surface, decision,
+                                            f"decision_not_auto_applicable:{decision}"))
+            continue
+
+        if decision in GR11_NOT_YET_IMPLEMENTED_DECISIONS:
+            skipped.append(SkippedDecision(wb_row_id, split, sample_id, surface, decision,
+                                            f"action_not_yet_implemented_for_auto_apply:{decision}"))
+            continue
+
+        if decision not in GR11_APPLY_DECISIONS:
+            skipped.append(SkippedDecision(wb_row_id, split, sample_id, surface, decision,
+                                            f"unrecognized_decision_value:{decision}"))
+            continue
+
+        # ── CORRECT_BOUNDARY / MERGE_ENTITY ──────────────────────────────
+        orig = _parse_gr11_original_entities(row.get("original_entities"))
+        if orig is None or len(orig) == 0:
+            skipped.append(SkippedDecision(wb_row_id, split, sample_id, surface, decision,
+                                            "missing_or_unparseable_original_entities"))
+            continue
+
+        final_span = _parse_span_pair(row.get("final_span"))
+        final_label = row.get("final_label")
+        final_label = str(final_label).strip() if not pd.isna(final_label) else None
+        rule_id = row.get("suggested_rule_id") or "GR-11"
+        reviewer_notes = str(row.get("reviewer_notes") or "")
+
+        if final_span is None or not final_label:
+            skipped.append(SkippedDecision(wb_row_id, split, sample_id, surface, decision,
+                                            "missing_final_span_or_label"))
+            continue
+        final_start, final_end = final_span
+
+        entities_here = entity_index.get((split, sample_id), [])
+        matched = []
+        for (osurf, olabel, ostart, oend) in orig:
+            found = next(
+                (e for e in entities_here if e["start"] == ostart and e["end"] == oend
+                 and e["label"] == olabel and e["surface"] == osurf), None,
+            )
+            matched.append(found)
+
+        status, msg = "valid", ""
+        if any(m is None for m in matched):
+            status = "error"
+            missing = [f"{o[0]}/{o[1]}[{o[2]}-{o[3]}]" for o, m in zip(orig, matched) if m is None]
+            msg = f"source_span_or_label_mismatch_vs_live_data:{';'.join(missing)}"
+
+        text = next((m["text"] for m in matched if m is not None), None)
+        if status == "valid":
+            if final_label not in ENTITY_TYPES:
+                status, msg = "error", f"invalid_final_label:{final_label}"
+            elif final_start > final_end or final_start < 0:
+                status, msg = "error", "invalid_offset_range"
+            elif text is not None and final_end >= len(text):
+                status, msg = "error", f"final_end_out_of_bounds (text_len={len(text)})"
+
+        old_entity_ids = frozenset(m["entity_id"] for m in matched if m is not None)
+        if status == "valid" and not check_no_overlap_after_edit(
+            entities_here, final_start, final_end, exclude_start=-1, exclude_end=-1,
+            ignore_entity_ids=old_entity_ids,
+        ):
+            status, msg = "error", "would_overlap_another_entity_not_in_original_entities"
+
+        if len(orig) == 1:
+            old = matched[0]
+            proposed.append(ProposedChange(
+                change_id=change_id, sample_id=sample_id, split=split,
+                document_id=row.get("document_id"), rule_id=str(rule_id),
+                reviewer_decision=decision,
+                old_span=(old["start"], old["end"]) if old else (orig[0][2], orig[0][3]),
+                old_label=old["label"] if old else orig[0][1],
+                new_span=(final_start, final_end), new_label=final_label,
+                original_text=text or "", normalized_text_if_any=None,
+                reviewer_notes=reviewer_notes, source_workbook_row=wb_row_id,
+                validation_status=status, validation_message=msg,
+            ))
+        else:
+            proposed.append(ProposedMerge(
+                change_id=change_id, sample_id=sample_id, split=split,
+                document_id=row.get("document_id"), rule_id=str(rule_id),
+                source_entity_ids=[m["entity_id"] if m else None for m in matched],
+                source_spans=[
+                    (m["start"], m["end"], m["label"], m["surface"]) if m else
+                    (o[2], o[3], o[1], o[0]) for m, o in zip(matched, orig)
+                ],
+                resulting_span=(final_start, final_end), resulting_label=final_label,
+                reviewer_notes=reviewer_notes, source_workbook_row=wb_row_id,
+                validation_status=status, validation_message=msg,
+            ))
+        change_id += 1
+
+    return proposed, skipped, quarantined
 
 
 def validate_dataset_checksums(prior_manifest: dict, current_checksums: dict) -> list:

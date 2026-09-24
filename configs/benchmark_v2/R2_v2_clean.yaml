@@ -1,0 +1,53 @@
+# ─────────────────────────────────────────────────────────────────
+# Benchmark v2 data-centric — R2: dataset_v2_clean (= v2_full trừ đúng 151
+# sample bị quarantine SKIP_UNANNOTATED_SAMPLE). Split composition KHÁC
+# v1/v2_full (train 1142, dev 147, test 157 câu) -- xem
+# data/dataset_v2/dataset_v2_clean/dataset_card.md. KHÔNG so sánh test F1
+# trực tiếp với R0 (v1) như thể cùng 1 test set.
+# Kien truc CO DINH giong het R0 (xem R0_v1.yaml) -- CHI khac data.*.
+# ─────────────────────────────────────────────────────────────────
+project:
+  name: "benchmark_v2_R2_v2_clean"
+  seed: 42
+
+data:
+  train: "data/dataset_v2/dataset_v2_clean/train.txt"
+  dev:   "data/dataset_v2/dataset_v2_clean/dev.txt"
+  test:  "data/dataset_v2/dataset_v2_clean/test.txt"
+  max_len: 256
+  label_scheme: "bio"
+
+model:
+  method: "guwenbert_crf"
+  backbone: "SIKU-BERT/sikubert"
+  dropout: 0.1
+  pretrained_ckpt: null
+
+training:
+  epochs: 20
+  batch_size: 16
+  bert_lr: 1.0e-5
+  head_lr: 1.0e-3
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  grad_clip: 1.0
+  fp16: true
+
+early_stopping:
+  enabled: true
+  patience: 5
+  min_delta: 0.001
+
+checkpoint:
+  output_dir: "outputs/benchmark_v2/R2_v2_clean"   # + /seed<N> khi chay
+  save_top_k: 1
+
+evaluation:
+  constrained_decode: true
+  constrained_scheme: "bio"
+
+logging:
+  level: "INFO"
+  use_wandb: false
+  wandb_project: "benchmark_v2"
+  wandb_entity: null

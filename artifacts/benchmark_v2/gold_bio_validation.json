@@ -1,0 +1,56 @@
+{
+  "R0_train": {
+    "n_sentences": 1277,
+    "gold_bio_violations": 0,
+    "token_label_align_mismatch": 0,
+    "roundtrip_span_mismatch_on_clean_sentences": 0
+  },
+  "R0_dev": {
+    "n_sentences": 160,
+    "gold_bio_violations": 0,
+    "token_label_align_mismatch": 0,
+    "roundtrip_span_mismatch_on_clean_sentences": 0
+  },
+  "R0_test": {
+    "n_sentences": 160,
+    "gold_bio_violations": 0,
+    "token_label_align_mismatch": 0,
+    "roundtrip_span_mismatch_on_clean_sentences": 0
+  },
+  "R1_train": {
+    "n_sentences": 1277,
+    "gold_bio_violations": 0,
+    "token_label_align_mismatch": 0,
+    "roundtrip_span_mismatch_on_clean_sentences": 0
+  },
+  "R1_dev": {
+    "n_sentences": 160,
+    "gold_bio_violations": 0,
+    "token_label_align_mismatch": 0,
+    "roundtrip_span_mismatch_on_clean_sentences": 0
+  },
+  "R1_test": {
+    "n_sentences": 160,
+    "gold_bio_violations": 0,
+    "token_label_align_mismatch": 0,
+    "roundtrip_span_mismatch_on_clean_sentences": 0
+  },
+  "R2_train": {
+    "n_sentences": 1142,
+    "gold_bio_violations": 0,
+    "token_label_align_mismatch": 0,
+    "roundtrip_span_mismatch_on_clean_sentences": 0
+  },
+  "R2_dev": {
+    "n_sentences": 147,
+    "gold_bio_violations": 0,
+    "token_label_align_mismatch": 0,
+    "roundtrip_span_mismatch_on_clean_sentences": 0
+  },
+  "R2_test": {
+    "n_sentences": 157,
+    "gold_bio_violations": 0,
+    "token_label_align_mismatch": 0,
+    "roundtrip_span_mismatch_on_clean_sentences": 0
+  }
+}

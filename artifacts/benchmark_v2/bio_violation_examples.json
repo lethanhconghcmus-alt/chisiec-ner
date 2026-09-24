@@ -1,0 +1,1022 @@
+[
+  {
+    "split": "test",
+    "sample_id": 0,
+    "raw_text": "少保豪郡公阮德業之子嘗從征伐果敢善戰累官至都督同知爵瑞郡公.王以次女鄭氏玉檉嫁之.但性殘忍特功驕横第宅僣侈又父子潜貯噐械私𤼵與民隂圖不軌.事覺付下廷議反形已具.王念其有戰功止削奪官爵免死而誅其子阮德兼等三人〇.九月甲辰日上一抱一背現于兑方亢宿度〇.許國子監司業綏禄伯阮光岳陞翰林院侍讀致仕〇.冬十二月參從吏部尙書兼東閣大學士少保燕郡公范公著年.",
+    "violation_position": 23,
+    "violation_reason": "I-TITLE tại vị trí 23 không có B-TITLE/I-TITLE liền trước (prev_type=None, sample_id=0)",
+    "token_at_violation": "同",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-TITLE",
+    "constrained_decoded_tag_at_pos": "B-DTM",
+    "gold_tag_at_pos": "I-TITLE",
+    "raw_pred_tags_window": [
+      "B-LOC",
+      "O",
+      "O",
+      "I-TITLE",
+      "O",
+      "B-LOC",
+      "O"
+    ],
+    "constrained_pred_tags_window": [
+      "B-LOC",
+      "O",
+      "O",
+      "B-DTM",
+      "B-DTM",
+      "B-LOC",
+      "O"
+    ],
+    "gold_tags_window": [
+      "O",
+      "B-TITLE",
+      "I-TITLE",
+      "I-TITLE",
+      "I-TITLE",
+      "O",
+      "B-TITLE"
+    ],
+    "tokens_window": [
+      "至",
+      "都",
+      "督",
+      "同",
+      "知",
+      "爵",
+      "瑞"
+    ],
+    "n_valid_tokens_in_sentence": 172,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 0,
+    "raw_text": "少保豪郡公阮德業之子嘗從征伐果敢善戰累官至都督同知爵瑞郡公.王以次女鄭氏玉檉嫁之.但性殘忍特功驕横第宅僣侈又父子潜貯噐械私𤼵與民隂圖不軌.事覺付下廷議反形已具.王念其有戰功止削奪官爵免死而誅其子阮德兼等三人〇.九月甲辰日上一抱一背現于兑方亢宿度〇.許國子監司業綏禄伯阮光岳陞翰林院侍讀致仕〇.冬十二月參從吏部尙書兼東閣大學士少保燕郡公范公著年.",
+    "violation_position": 70,
+    "violation_reason": "I-LOC tại vị trí 70 không có B-LOC/I-LOC liền trước (prev_type=None, sample_id=0)",
+    "token_at_violation": "覺",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-LOC",
+    "constrained_decoded_tag_at_pos": "I-LOC",
+    "gold_tag_at_pos": "O",
+    "raw_pred_tags_window": [
+      "B-DTM",
+      "O",
+      "O",
+      "I-LOC",
+      "I-LOC",
+      "I-ORG",
+      "I-LOC"
+    ],
+    "constrained_pred_tags_window": [
+      "B-ORG",
+      "B-LOC",
+      "I-LOC",
+      "I-LOC",
+      "I-LOC",
+      "O",
+      "O"
+    ],
+    "gold_tags_window": [
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "tokens_window": [
+      "軌",
+      ".",
+      "事",
+      "覺",
+      "付",
+      "下",
+      "廷"
+    ],
+    "n_valid_tokens_in_sentence": 172,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 0,
+    "raw_text": "少保豪郡公阮德業之子嘗從征伐果敢善戰累官至都督同知爵瑞郡公.王以次女鄭氏玉檉嫁之.但性殘忍特功驕横第宅僣侈又父子潜貯噐械私𤼵與民隂圖不軌.事覺付下廷議反形已具.王念其有戰功止削奪官爵免死而誅其子阮德兼等三人〇.九月甲辰日上一抱一背現于兑方亢宿度〇.許國子監司業綏禄伯阮光岳陞翰林院侍讀致仕〇.冬十二月參從吏部尙書兼東閣大學士少保燕郡公范公著年.",
+    "violation_position": 72,
+    "violation_reason": "I-ORG tại vị trí 72 không có B-ORG/I-ORG liền trước (prev_type=LOC, sample_id=0)",
+    "token_at_violation": "下",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-ORG",
+    "constrained_decoded_tag_at_pos": "O",
+    "gold_tag_at_pos": "O",
+    "raw_pred_tags_window": [
+      "O",
+      "I-LOC",
+      "I-LOC",
+      "I-ORG",
+      "I-LOC",
+      "O",
+      "O"
+    ],
+    "constrained_pred_tags_window": [
+      "I-LOC",
+      "I-LOC",
+      "I-LOC",
+      "O",
+      "O",
+      "B-LOC",
+      "O"
+    ],
+    "gold_tags_window": [
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "tokens_window": [
+      "事",
+      "覺",
+      "付",
+      "下",
+      "廷",
+      "議",
+      "反"
+    ],
+    "n_valid_tokens_in_sentence": 172,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 0,
+    "raw_text": "少保豪郡公阮德業之子嘗從征伐果敢善戰累官至都督同知爵瑞郡公.王以次女鄭氏玉檉嫁之.但性殘忍特功驕横第宅僣侈又父子潜貯噐械私𤼵與民隂圖不軌.事覺付下廷議反形已具.王念其有戰功止削奪官爵免死而誅其子阮德兼等三人〇.九月甲辰日上一抱一背現于兑方亢宿度〇.許國子監司業綏禄伯阮光岳陞翰林院侍讀致仕〇.冬十二月參從吏部尙書兼東閣大學士少保燕郡公范公著年.",
+    "violation_position": 73,
+    "violation_reason": "I-LOC tại vị trí 73 không có B-LOC/I-LOC liền trước (prev_type=ORG, sample_id=0)",
+    "token_at_violation": "廷",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-LOC",
+    "constrained_decoded_tag_at_pos": "O",
+    "gold_tag_at_pos": "O",
+    "raw_pred_tags_window": [
+      "I-LOC",
+      "I-LOC",
+      "I-ORG",
+      "I-LOC",
+      "O",
+      "O",
+      "O"
+    ],
+    "constrained_pred_tags_window": [
+      "I-LOC",
+      "I-LOC",
+      "O",
+      "O",
+      "B-LOC",
+      "O",
+      "O"
+    ],
+    "gold_tags_window": [
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "tokens_window": [
+      "覺",
+      "付",
+      "下",
+      "廷",
+      "議",
+      "反",
+      "形"
+    ],
+    "n_valid_tokens_in_sentence": 172,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 0,
+    "raw_text": "少保豪郡公阮德業之子嘗從征伐果敢善戰累官至都督同知爵瑞郡公.王以次女鄭氏玉檉嫁之.但性殘忍特功驕横第宅僣侈又父子潜貯噐械私𤼵與民隂圖不軌.事覺付下廷議反形已具.王念其有戰功止削奪官爵免死而誅其子阮德兼等三人〇.九月甲辰日上一抱一背現于兑方亢宿度〇.許國子監司業綏禄伯阮光岳陞翰林院侍讀致仕〇.冬十二月參從吏部尙書兼東閣大學士少保燕郡公范公著年.",
+    "violation_position": 111,
+    "violation_reason": "I-LOC tại vị trí 111 không có B-LOC/I-LOC liền trước (prev_type=None, sample_id=0)",
+    "token_at_violation": "一",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-LOC",
+    "constrained_decoded_tag_at_pos": "O",
+    "gold_tag_at_pos": "O",
+    "raw_pred_tags_window": [
+      "O",
+      "O",
+      "O",
+      "I-LOC",
+      "O",
+      "O",
+      "O"
+    ],
+    "constrained_pred_tags_window": [
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "gold_tags_window": [
+      "I-DTM",
+      "I-DTM",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "tokens_window": [
+      "辰",
+      "日",
+      "上",
+      "一",
+      "抱",
+      "一",
+      "背"
+    ],
+    "n_valid_tokens_in_sentence": 172,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 0,
+    "raw_text": "少保豪郡公阮德業之子嘗從征伐果敢善戰累官至都督同知爵瑞郡公.王以次女鄭氏玉檉嫁之.但性殘忍特功驕横第宅僣侈又父子潜貯噐械私𤼵與民隂圖不軌.事覺付下廷議反形已具.王念其有戰功止削奪官爵免死而誅其子阮德兼等三人〇.九月甲辰日上一抱一背現于兑方亢宿度〇.許國子監司業綏禄伯阮光岳陞翰林院侍讀致仕〇.冬十二月參從吏部尙書兼東閣大學士少保燕郡公范公著年.",
+    "violation_position": 126,
+    "violation_reason": "I-ORG tại vị trí 126 không có B-ORG/I-ORG liền trước (prev_type=None, sample_id=0)",
+    "token_at_violation": "子",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-ORG",
+    "constrained_decoded_tag_at_pos": "I-ORG",
+    "gold_tag_at_pos": "I-TITLE",
+    "raw_pred_tags_window": [
+      "B-LOC",
+      "B-ORG",
+      "O",
+      "I-ORG",
+      "I-ORG",
+      "O",
+      "B-LOC"
+    ],
+    "constrained_pred_tags_window": [
+      "B-LOC",
+      "B-ORG",
+      "I-ORG",
+      "I-ORG",
+      "I-ORG",
+      "O",
+      "B-LOC"
+    ],
+    "gold_tags_window": [
+      "O",
+      "O",
+      "B-TITLE",
+      "I-TITLE",
+      "I-TITLE",
+      "I-TITLE",
+      "I-TITLE"
+    ],
+    "tokens_window": [
+      ".",
+      "許",
+      "國",
+      "子",
+      "監",
+      "司",
+      "業"
+    ],
+    "n_valid_tokens_in_sentence": 172,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 0,
+    "raw_text": "少保豪郡公阮德業之子嘗從征伐果敢善戰累官至都督同知爵瑞郡公.王以次女鄭氏玉檉嫁之.但性殘忍特功驕横第宅僣侈又父子潜貯噐械私𤼵與民隂圖不軌.事覺付下廷議反形已具.王念其有戰功止削奪官爵免死而誅其子阮德兼等三人〇.九月甲辰日上一抱一背現于兑方亢宿度〇.許國子監司業綏禄伯阮光岳陞翰林院侍讀致仕〇.冬十二月參從吏部尙書兼東閣大學士少保燕郡公范公著年.",
+    "violation_position": 151,
+    "violation_reason": "I-TITLE tại vị trí 151 không có B-TITLE/I-TITLE liền trước (prev_type=LOC, sample_id=0)",
+    "token_at_violation": "從",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-TITLE",
+    "constrained_decoded_tag_at_pos": "B-TITLE",
+    "gold_tag_at_pos": "I-TITLE",
+    "raw_pred_tags_window": [
+      "B-LOC",
+      "O",
+      "B-LOC",
+      "I-TITLE",
+      "O",
+      "I-TITLE",
+      "O"
+    ],
+    "constrained_pred_tags_window": [
+      "B-LOC",
+      "O",
+      "B-LOC",
+      "B-TITLE",
+      "O",
+      "B-LOC",
+      "O"
+    ],
+    "gold_tags_window": [
+      "I-DTM",
+      "I-DTM",
+      "B-TITLE",
+      "I-TITLE",
+      "B-TITLE",
+      "I-TITLE",
+      "I-TITLE"
+    ],
+    "tokens_window": [
+      "二",
+      "月",
+      "參",
+      "從",
+      "吏",
+      "部",
+      "尙"
+    ],
+    "n_valid_tokens_in_sentence": 172,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 0,
+    "raw_text": "少保豪郡公阮德業之子嘗從征伐果敢善戰累官至都督同知爵瑞郡公.王以次女鄭氏玉檉嫁之.但性殘忍特功驕横第宅僣侈又父子潜貯噐械私𤼵與民隂圖不軌.事覺付下廷議反形已具.王念其有戰功止削奪官爵免死而誅其子阮德兼等三人〇.九月甲辰日上一抱一背現于兑方亢宿度〇.許國子監司業綏禄伯阮光岳陞翰林院侍讀致仕〇.冬十二月參從吏部尙書兼東閣大學士少保燕郡公范公著年.",
+    "violation_position": 153,
+    "violation_reason": "I-TITLE tại vị trí 153 không có B-TITLE/I-TITLE liền trước (prev_type=None, sample_id=0)",
+    "token_at_violation": "部",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-TITLE",
+    "constrained_decoded_tag_at_pos": "B-LOC",
+    "gold_tag_at_pos": "I-TITLE",
+    "raw_pred_tags_window": [
+      "B-LOC",
+      "I-TITLE",
+      "O",
+      "I-TITLE",
+      "O",
+      "I-ORG",
+      "I-PER"
+    ],
+    "constrained_pred_tags_window": [
+      "B-LOC",
+      "B-TITLE",
+      "O",
+      "B-LOC",
+      "O",
+      "O",
+      "B-LOC"
+    ],
+    "gold_tags_window": [
+      "B-TITLE",
+      "I-TITLE",
+      "B-TITLE",
+      "I-TITLE",
+      "I-TITLE",
+      "I-TITLE",
+      "O"
+    ],
+    "tokens_window": [
+      "參",
+      "從",
+      "吏",
+      "部",
+      "尙",
+      "書",
+      "兼"
+    ],
+    "n_valid_tokens_in_sentence": 172,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 0,
+    "raw_text": "少保豪郡公阮德業之子嘗從征伐果敢善戰累官至都督同知爵瑞郡公.王以次女鄭氏玉檉嫁之.但性殘忍特功驕横第宅僣侈又父子潜貯噐械私𤼵與民隂圖不軌.事覺付下廷議反形已具.王念其有戰功止削奪官爵免死而誅其子阮德兼等三人〇.九月甲辰日上一抱一背現于兑方亢宿度〇.許國子監司業綏禄伯阮光岳陞翰林院侍讀致仕〇.冬十二月參從吏部尙書兼東閣大學士少保燕郡公范公著年.",
+    "violation_position": 155,
+    "violation_reason": "I-ORG tại vị trí 155 không có B-ORG/I-ORG liền trước (prev_type=None, sample_id=0)",
+    "token_at_violation": "書",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-ORG",
+    "constrained_decoded_tag_at_pos": "O",
+    "gold_tag_at_pos": "I-TITLE",
+    "raw_pred_tags_window": [
+      "O",
+      "I-TITLE",
+      "O",
+      "I-ORG",
+      "I-PER",
+      "O",
+      "I-ORG"
+    ],
+    "constrained_pred_tags_window": [
+      "O",
+      "B-LOC",
+      "O",
+      "O",
+      "B-LOC",
+      "O",
+      "B-LOC"
+    ],
+    "gold_tags_window": [
+      "B-TITLE",
+      "I-TITLE",
+      "I-TITLE",
+      "I-TITLE",
+      "O",
+      "B-TITLE",
+      "I-TITLE"
+    ],
+    "tokens_window": [
+      "吏",
+      "部",
+      "尙",
+      "書",
+      "兼",
+      "東",
+      "閣"
+    ],
+    "n_valid_tokens_in_sentence": 172,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 0,
+    "raw_text": "少保豪郡公阮德業之子嘗從征伐果敢善戰累官至都督同知爵瑞郡公.王以次女鄭氏玉檉嫁之.但性殘忍特功驕横第宅僣侈又父子潜貯噐械私𤼵與民隂圖不軌.事覺付下廷議反形已具.王念其有戰功止削奪官爵免死而誅其子阮德兼等三人〇.九月甲辰日上一抱一背現于兑方亢宿度〇.許國子監司業綏禄伯阮光岳陞翰林院侍讀致仕〇.冬十二月參從吏部尙書兼東閣大學士少保燕郡公范公著年.",
+    "violation_position": 156,
+    "violation_reason": "I-PER tại vị trí 156 không có B-PER/I-PER liền trước (prev_type=ORG, sample_id=0)",
+    "token_at_violation": "兼",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-PER",
+    "constrained_decoded_tag_at_pos": "B-LOC",
+    "gold_tag_at_pos": "O",
+    "raw_pred_tags_window": [
+      "I-TITLE",
+      "O",
+      "I-ORG",
+      "I-PER",
+      "O",
+      "I-ORG",
+      "O"
+    ],
+    "constrained_pred_tags_window": [
+      "B-LOC",
+      "O",
+      "O",
+      "B-LOC",
+      "O",
+      "B-LOC",
+      "O"
+    ],
+    "gold_tags_window": [
+      "I-TITLE",
+      "I-TITLE",
+      "I-TITLE",
+      "O",
+      "B-TITLE",
+      "I-TITLE",
+      "I-TITLE"
+    ],
+    "tokens_window": [
+      "部",
+      "尙",
+      "書",
+      "兼",
+      "東",
+      "閣",
+      "大"
+    ],
+    "n_valid_tokens_in_sentence": 172,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 0,
+    "raw_text": "少保豪郡公阮德業之子嘗從征伐果敢善戰累官至都督同知爵瑞郡公.王以次女鄭氏玉檉嫁之.但性殘忍特功驕横第宅僣侈又父子潜貯噐械私𤼵與民隂圖不軌.事覺付下廷議反形已具.王念其有戰功止削奪官爵免死而誅其子阮德兼等三人〇.九月甲辰日上一抱一背現于兑方亢宿度〇.許國子監司業綏禄伯阮光岳陞翰林院侍讀致仕〇.冬十二月參從吏部尙書兼東閣大學士少保燕郡公范公著年.",
+    "violation_position": 158,
+    "violation_reason": "I-ORG tại vị trí 158 không có B-ORG/I-ORG liền trước (prev_type=None, sample_id=0)",
+    "token_at_violation": "閣",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-ORG",
+    "constrained_decoded_tag_at_pos": "B-LOC",
+    "gold_tag_at_pos": "I-TITLE",
+    "raw_pred_tags_window": [
+      "I-ORG",
+      "I-PER",
+      "O",
+      "I-ORG",
+      "O",
+      "O",
+      "O"
+    ],
+    "constrained_pred_tags_window": [
+      "O",
+      "B-LOC",
+      "O",
+      "B-LOC",
+      "O",
+      "O",
+      "O"
+    ],
+    "gold_tags_window": [
+      "I-TITLE",
+      "O",
+      "B-TITLE",
+      "I-TITLE",
+      "I-TITLE",
+      "I-TITLE",
+      "I-TITLE"
+    ],
+    "tokens_window": [
+      "書",
+      "兼",
+      "東",
+      "閣",
+      "大",
+      "學",
+      "士"
+    ],
+    "n_valid_tokens_in_sentence": 172,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 1,
+    "raw_text": "陞職爵有差〇.九月大舉進征髙平.時髙平地方猶爲莫敬宇阻㨿拒違朝命不臣州民𨺻溺.於是王親提大兵進𤼵諒山道委節制府太尉宜國公鄭根統督諸将進𤼵太原道差太傅莅郡公鄭棟少尉雲郡公鄭榩少尉豪郡公黎時憲少傅奠郡公鄭楃都督同知禄郡公丁文左立郡公黎珠等爲統領督率.以禮部左侍郎陽郡公阮能紹刑部左侍郎桂海侯黎仕澈工部左侍郎延禄伯楊㵆兵部右侍郎潤裔伯胡士.",
+    "violation_position": 3,
+    "violation_reason": "I-DTM tại vị trí 3 không có B-DTM/I-DTM liền trước (prev_type=None, sample_id=1)",
+    "token_at_violation": "有",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-DTM",
+    "constrained_decoded_tag_at_pos": "O",
+    "gold_tag_at_pos": "O",
+    "raw_pred_tags_window": [
+      "B-DTM",
+      "O",
+      "O",
+      "I-DTM",
+      "O",
+      "B-DTM",
+      "B-DTM"
+    ],
+    "constrained_pred_tags_window": [
+      "B-DTM",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-DTM",
+      "B-DTM"
+    ],
+    "gold_tags_window": [
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "tokens_window": [
+      "陞",
+      "職",
+      "爵",
+      "有",
+      "差",
+      "〇",
+      "."
+    ],
+    "n_valid_tokens_in_sentence": 167,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 1,
+    "raw_text": "陞職爵有差〇.九月大舉進征髙平.時髙平地方猶爲莫敬宇阻㨿拒違朝命不臣州民𨺻溺.於是王親提大兵進𤼵諒山道委節制府太尉宜國公鄭根統督諸将進𤼵太原道差太傅莅郡公鄭棟少尉雲郡公鄭榩少尉豪郡公黎時憲少傅奠郡公鄭楃都督同知禄郡公丁文左立郡公黎珠等爲統領督率.以禮部左侍郎陽郡公阮能紹刑部左侍郎桂海侯黎仕澈工部左侍郎延禄伯楊㵆兵部右侍郎潤裔伯胡士.",
+    "violation_position": 25,
+    "violation_reason": "I-PER tại vị trí 25 không có B-PER/I-PER liền trước (prev_type=LOC, sample_id=1)",
+    "token_at_violation": "宇",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-PER",
+    "constrained_decoded_tag_at_pos": "B-LOC",
+    "gold_tag_at_pos": "I-PER",
+    "raw_pred_tags_window": [
+      "O",
+      "B-ORG",
+      "B-LOC",
+      "I-PER",
+      "O",
+      "B-LOC",
+      "O"
+    ],
+    "constrained_pred_tags_window": [
+      "O",
+      "B-ORG",
+      "B-LOC",
+      "B-LOC",
+      "O",
+      "B-LOC",
+      "O"
+    ],
+    "gold_tags_window": [
+      "O",
+      "B-PER",
+      "I-PER",
+      "I-PER",
+      "O",
+      "O",
+      "O"
+    ],
+    "tokens_window": [
+      "爲",
+      "莫",
+      "敬",
+      "宇",
+      "阻",
+      "㨿",
+      "拒"
+    ],
+    "n_valid_tokens_in_sentence": 167,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 1,
+    "raw_text": "陞職爵有差〇.九月大舉進征髙平.時髙平地方猶爲莫敬宇阻㨿拒違朝命不臣州民𨺻溺.於是王親提大兵進𤼵諒山道委節制府太尉宜國公鄭根統督諸将進𤼵太原道差太傅莅郡公鄭棟少尉雲郡公鄭榩少尉豪郡公黎時憲少傅奠郡公鄭楃都督同知禄郡公丁文左立郡公黎珠等爲統領督率.以禮部左侍郎陽郡公阮能紹刑部左侍郎桂海侯黎仕澈工部左侍郎延禄伯楊㵆兵部右侍郎潤裔伯胡士.",
+    "violation_position": 40,
+    "violation_reason": "I-ORG tại vị trí 40 không có B-ORG/I-ORG liền trước (prev_type=None, sample_id=1)",
+    "token_at_violation": "是",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-ORG",
+    "constrained_decoded_tag_at_pos": "O",
+    "gold_tag_at_pos": "O",
+    "raw_pred_tags_window": [
+      "O",
+      "B-LOC",
+      "O",
+      "I-ORG",
+      "O",
+      "O",
+      "O"
+    ],
+    "constrained_pred_tags_window": [
+      "O",
+      "B-LOC",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "gold_tags_window": [
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "tokens_window": [
+      "溺",
+      ".",
+      "於",
+      "是",
+      "王",
+      "親",
+      "提"
+    ],
+    "n_valid_tokens_in_sentence": 167,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 1,
+    "raw_text": "陞職爵有差〇.九月大舉進征髙平.時髙平地方猶爲莫敬宇阻㨿拒違朝命不臣州民𨺻溺.於是王親提大兵進𤼵諒山道委節制府太尉宜國公鄭根統督諸将進𤼵太原道差太傅莅郡公鄭棟少尉雲郡公鄭榩少尉豪郡公黎時憲少傅奠郡公鄭楃都督同知禄郡公丁文左立郡公黎珠等爲統領督率.以禮部左侍郎陽郡公阮能紹刑部左侍郎桂海侯黎仕澈工部左侍郎延禄伯楊㵆兵部右侍郎潤裔伯胡士.",
+    "violation_position": 47,
+    "violation_reason": "I-ORG tại vị trí 47 không có B-ORG/I-ORG liền trước (prev_type=DTM, sample_id=1)",
+    "token_at_violation": "𤼵",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-ORG",
+    "constrained_decoded_tag_at_pos": "B-LOC",
+    "gold_tag_at_pos": "O",
+    "raw_pred_tags_window": [
+      "O",
+      "O",
+      "B-DTM",
+      "I-ORG",
+      "O",
+      "B-LOC",
+      "O"
+    ],
+    "constrained_pred_tags_window": [
+      "O",
+      "O",
+      "B-DTM",
+      "B-LOC",
+      "O",
+      "B-LOC",
+      "O"
+    ],
+    "gold_tags_window": [
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-LOC",
+      "I-LOC",
+      "O"
+    ],
+    "tokens_window": [
+      "大",
+      "兵",
+      "進",
+      "𤼵",
+      "諒",
+      "山",
+      "道"
+    ],
+    "n_valid_tokens_in_sentence": 167,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 1,
+    "raw_text": "陞職爵有差〇.九月大舉進征髙平.時髙平地方猶爲莫敬宇阻㨿拒違朝命不臣州民𨺻溺.於是王親提大兵進𤼵諒山道委節制府太尉宜國公鄭根統督諸将進𤼵太原道差太傅莅郡公鄭棟少尉雲郡公鄭榩少尉豪郡公黎時憲少傅奠郡公鄭楃都督同知禄郡公丁文左立郡公黎珠等爲統領督率.以禮部左侍郎陽郡公阮能紹刑部左侍郎桂海侯黎仕澈工部左侍郎延禄伯楊㵆兵部右侍郎潤裔伯胡士.",
+    "violation_position": 60,
+    "violation_reason": "I-LOC tại vị trí 60 không có B-LOC/I-LOC liền trước (prev_type=DTM, sample_id=1)",
+    "token_at_violation": "鄭",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-LOC",
+    "constrained_decoded_tag_at_pos": "O",
+    "gold_tag_at_pos": "B-PER",
+    "raw_pred_tags_window": [
+      "B-DTM",
+      "O",
+      "B-DTM",
+      "I-LOC",
+      "O",
+      "O",
+      "O"
+    ],
+    "constrained_pred_tags_window": [
+      "B-DTM",
+      "O",
+      "B-LOC",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "gold_tags_window": [
+      "B-TITLE",
+      "I-TITLE",
+      "I-TITLE",
+      "B-PER",
+      "I-PER",
+      "O",
+      "O"
+    ],
+    "tokens_window": [
+      "宜",
+      "國",
+      "公",
+      "鄭",
+      "根",
+      "統",
+      "督"
+    ],
+    "n_valid_tokens_in_sentence": 167,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 1,
+    "raw_text": "陞職爵有差〇.九月大舉進征髙平.時髙平地方猶爲莫敬宇阻㨿拒違朝命不臣州民𨺻溺.於是王親提大兵進𤼵諒山道委節制府太尉宜國公鄭根統督諸将進𤼵太原道差太傅莅郡公鄭棟少尉雲郡公鄭榩少尉豪郡公黎時憲少傅奠郡公鄭楃都督同知禄郡公丁文左立郡公黎珠等爲統領督率.以禮部左侍郎陽郡公阮能紹刑部左侍郎桂海侯黎仕澈工部左侍郎延禄伯楊㵆兵部右侍郎潤裔伯胡士.",
+    "violation_position": 73,
+    "violation_reason": "I-TITLE tại vị trí 73 không có B-TITLE/I-TITLE liền trước (prev_type=None, sample_id=1)",
+    "token_at_violation": "傅",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-TITLE",
+    "constrained_decoded_tag_at_pos": "O",
+    "gold_tag_at_pos": "I-TITLE",
+    "raw_pred_tags_window": [
+      "O",
+      "O",
+      "O",
+      "I-TITLE",
+      "O",
+      "O",
+      "B-LOC"
+    ],
+    "constrained_pred_tags_window": [
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-LOC"
+    ],
+    "gold_tags_window": [
+      "O",
+      "O",
+      "B-TITLE",
+      "I-TITLE",
+      "B-TITLE",
+      "I-TITLE",
+      "I-TITLE"
+    ],
+    "tokens_window": [
+      "道",
+      "差",
+      "太",
+      "傅",
+      "莅",
+      "郡",
+      "公"
+    ],
+    "n_valid_tokens_in_sentence": 167,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 1,
+    "raw_text": "陞職爵有差〇.九月大舉進征髙平.時髙平地方猶爲莫敬宇阻㨿拒違朝命不臣州民𨺻溺.於是王親提大兵進𤼵諒山道委節制府太尉宜國公鄭根統督諸将進𤼵太原道差太傅莅郡公鄭棟少尉雲郡公鄭榩少尉豪郡公黎時憲少傅奠郡公鄭楃都督同知禄郡公丁文左立郡公黎珠等爲統領督率.以禮部左侍郎陽郡公阮能紹刑部左侍郎桂海侯黎仕澈工部左侍郎延禄伯楊㵆兵部右侍郎潤裔伯胡士.",
+    "violation_position": 80,
+    "violation_reason": "I-TITLE tại vị trí 80 không có B-TITLE/I-TITLE liền trước (prev_type=LOC, sample_id=1)",
+    "token_at_violation": "尉",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-TITLE",
+    "constrained_decoded_tag_at_pos": "O",
+    "gold_tag_at_pos": "I-TITLE",
+    "raw_pred_tags_window": [
+      "O",
+      "B-ORG",
+      "B-LOC",
+      "I-TITLE",
+      "O",
+      "O",
+      "B-LOC"
+    ],
+    "constrained_pred_tags_window": [
+      "O",
+      "B-ORG",
+      "B-LOC",
+      "O",
+      "B-LOC",
+      "O",
+      "B-LOC"
+    ],
+    "gold_tags_window": [
+      "B-PER",
+      "I-PER",
+      "B-TITLE",
+      "I-TITLE",
+      "B-TITLE",
+      "I-TITLE",
+      "I-TITLE"
+    ],
+    "tokens_window": [
+      "鄭",
+      "棟",
+      "少",
+      "尉",
+      "雲",
+      "郡",
+      "公"
+    ],
+    "n_valid_tokens_in_sentence": 167,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 1,
+    "raw_text": "陞職爵有差〇.九月大舉進征髙平.時髙平地方猶爲莫敬宇阻㨿拒違朝命不臣州民𨺻溺.於是王親提大兵進𤼵諒山道委節制府太尉宜國公鄭根統督諸将進𤼵太原道差太傅莅郡公鄭棟少尉雲郡公鄭榩少尉豪郡公黎時憲少傅奠郡公鄭楃都督同知禄郡公丁文左立郡公黎珠等爲統領督率.以禮部左侍郎陽郡公阮能紹刑部左侍郎桂海侯黎仕澈工部左侍郎延禄伯楊㵆兵部右侍郎潤裔伯胡士.",
+    "violation_position": 95,
+    "violation_reason": "I-TITLE tại vị trí 95 không có B-TITLE/I-TITLE liền trước (prev_type=LOC, sample_id=1)",
+    "token_at_violation": "傅",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-TITLE",
+    "constrained_decoded_tag_at_pos": "O",
+    "gold_tag_at_pos": "I-TITLE",
+    "raw_pred_tags_window": [
+      "B-ORG",
+      "B-ORG",
+      "B-LOC",
+      "I-TITLE",
+      "O",
+      "O",
+      "B-LOC"
+    ],
+    "constrained_pred_tags_window": [
+      "B-ORG",
+      "B-ORG",
+      "B-LOC",
+      "O",
+      "O",
+      "O",
+      "B-LOC"
+    ],
+    "gold_tags_window": [
+      "I-PER",
+      "I-PER",
+      "B-TITLE",
+      "I-TITLE",
+      "B-TITLE",
+      "I-TITLE",
+      "I-TITLE"
+    ],
+    "tokens_window": [
+      "時",
+      "憲",
+      "少",
+      "傅",
+      "奠",
+      "郡",
+      "公"
+    ],
+    "n_valid_tokens_in_sentence": 167,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  },
+  {
+    "split": "test",
+    "sample_id": 1,
+    "raw_text": "陞職爵有差〇.九月大舉進征髙平.時髙平地方猶爲莫敬宇阻㨿拒違朝命不臣州民𨺻溺.於是王親提大兵進𤼵諒山道委節制府太尉宜國公鄭根統督諸将進𤼵太原道差太傅莅郡公鄭棟少尉雲郡公鄭榩少尉豪郡公黎時憲少傅奠郡公鄭楃都督同知禄郡公丁文左立郡公黎珠等爲統領督率.以禮部左侍郎陽郡公阮能紹刑部左侍郎桂海侯黎仕澈工部左侍郎延禄伯楊㵆兵部右侍郎潤裔伯胡士.",
+    "violation_position": 103,
+    "violation_reason": "I-TITLE tại vị trí 103 không có B-TITLE/I-TITLE liền trước (prev_type=None, sample_id=1)",
+    "token_at_violation": "同",
+    "token_is_pua": false,
+    "raw_decoded_tag_at_pos": "I-TITLE",
+    "constrained_decoded_tag_at_pos": "B-DTM",
+    "gold_tag_at_pos": "I-TITLE",
+    "raw_pred_tags_window": [
+      "B-LOC",
+      "O",
+      "O",
+      "I-TITLE",
+      "I-TITLE",
+      "O",
+      "O"
+    ],
+    "constrained_pred_tags_window": [
+      "B-LOC",
+      "O",
+      "O",
+      "B-DTM",
+      "O",
+      "O",
+      "O"
+    ],
+    "gold_tags_window": [
+      "I-PER",
+      "B-TITLE",
+      "I-TITLE",
+      "I-TITLE",
+      "I-TITLE",
+      "B-TITLE",
+      "I-TITLE"
+    ],
+    "tokens_window": [
+      "楃",
+      "都",
+      "督",
+      "同",
+      "知",
+      "禄",
+      "郡"
+    ],
+    "n_valid_tokens_in_sentence": 167,
+    "category": "raw_crf_illegal_transition",
+    "note_on_mask_fields": "attention_mask/CRF-mask/label-mask KHONG duoc luu rieng tung vi tri trong predictions_full.json (chi luu KET QUA sau filter) -- co che filter da duoc verify boi test_special_and_pad_token_positions_excluded_before_violation_check va documented trong bio_decoding_policy.md phan A."
+  }
+]

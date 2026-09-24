@@ -19,12 +19,22 @@ logger = get_logger(__name__)
 
 class Evaluator:
     def __init__(self, model, id2label: dict, device: torch.device, output_dir: str,
-                 scheme: str = None):
+                 scheme: str = None, use_constrained_decode: bool = False,
+                 label2id: dict = None, constrained_scheme: str = "bio"):
         """
         scheme: None (mặc định, GIỮ NGUYÊN hành vi cũ — BIO, không strict
         IOBES) hoặc "IOBES" (dùng cho data ở scheme BIOES — M1: BIOES nhưng
         vẫn model CRF cũ không boundary heads). Không truyền = không đổi gì
         so với trước.
+
+        use_constrained_decode: MẶC ĐỊNH False (KHÔNG đổi hành vi cho bất kỳ
+        caller cũ nào — M0/M1/M2/DAPT/... vẫn dùng raw torchcrf decode y hệt
+        trước giờ). Chỉ bật True tường minh cho benchmark_v2 (xem
+        scripts/train.py, cfg.evaluation.constrained_decode). Khi True: decode
+        qua src.constrained_decode (BẢN SAO crf đã hard-constrain theo BIO
+        state machine — src/bioes_utils.py), KHÔNG đụng model.crf gốc/loss/
+        optimizer. Yêu cầu label2id (để build constraint mask đúng label
+        space) và model phải có thuộc tính .crf (GuwenBertCRF).
         """
         self.model      = model
         self.id2label   = id2label
@@ -35,6 +45,21 @@ class Evaluator:
         if scheme == "IOBES":
             from seqeval.scheme import IOBES
             self._seqeval_kwargs = {"mode": "strict", "scheme": IOBES}
+
+        self.use_constrained_decode = use_constrained_decode
+        self.constrained_crf = None
+        if use_constrained_decode:
+            if label2id is None:
+                raise ValueError("use_constrained_decode=True can truyen label2id.")
+            from src.constrained_decode import build_constrained_crf
+            self.constrained_crf = build_constrained_crf(model.crf, label2id, scheme=constrained_scheme)
+
+    def _decode(self, input_ids, attention_mask, token_type_ids, gaz_ids=None):
+        if self.use_constrained_decode:
+            from src.constrained_decode import constrained_decode_batch
+            return constrained_decode_batch(self.model, self.constrained_crf,
+                                             input_ids, attention_mask, token_type_ids)
+        return self.model(input_ids, attention_mask, token_type_ids, gaz_ids=gaz_ids)
 
     # ── CORE EVALUATE ─────────────────────────────────────────────────────────
     @torch.no_grad()
@@ -51,7 +76,7 @@ class Evaluator:
             if gaz_ids is not None:
                 gaz_ids = gaz_ids.to(self.device)
 
-            preds = self.model(input_ids, attention_mask, token_type_ids, gaz_ids=gaz_ids)
+            preds = self._decode(input_ids, attention_mask, token_type_ids, gaz_ids=gaz_ids)
 
             for pred_seq, label_seq, mask in zip(preds, labels, attention_mask):
                 true_tags, pred_tags = [], []
@@ -109,7 +134,7 @@ class Evaluator:
             gaz_ids        = batch.get("gaz_ids", None)
             if gaz_ids is not None:
                 gaz_ids = gaz_ids.to(self.device)
-            preds          = self.model(input_ids, attention_mask, token_type_ids, gaz_ids=gaz_ids)
+            preds          = self._decode(input_ids, attention_mask, token_type_ids, gaz_ids=gaz_ids)
 
             for pred_seq, label_seq, mask in zip(preds, labels, attention_mask):
                 true_tags, pred_tags = [], []
@@ -160,7 +185,7 @@ class Evaluator:
             gaz_ids        = batch.get("gaz_ids", None)
             if gaz_ids is not None:
                 gaz_ids = gaz_ids.to(self.device)
-            preds          = self.model(input_ids, attention_mask, token_type_ids, gaz_ids=gaz_ids)
+            preds          = self._decode(input_ids, attention_mask, token_type_ids, gaz_ids=gaz_ids)
 
             for pred_seq, label_seq, mask in zip(preds, labels, attention_mask):
                 for p, l, m in zip(pred_seq, label_seq.tolist(), mask.tolist()):
