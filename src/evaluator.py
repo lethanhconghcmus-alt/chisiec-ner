@@ -47,17 +47,29 @@ class Evaluator:
             self._seqeval_kwargs = {"mode": "strict", "scheme": IOBES}
 
         self.use_constrained_decode = use_constrained_decode
-        self.constrained_crf = None
-        if use_constrained_decode:
-            if label2id is None:
-                raise ValueError("use_constrained_decode=True can truyen label2id.")
-            from src.constrained_decode import build_constrained_crf
-            self.constrained_crf = build_constrained_crf(model.crf, label2id, scheme=constrained_scheme)
+        self.label2id = label2id
+        self.constrained_scheme = constrained_scheme
+        if use_constrained_decode and label2id is None:
+            raise ValueError("use_constrained_decode=True can truyen label2id.")
 
-    def _decode(self, input_ids, attention_mask, token_type_ids, gaz_ids=None):
+    @property
+    def constrained_crf(self):
+        """BAN SAO crf hard-constrained, xay MOI moi lan goi (KHONG cache) --
+        model.crf duoc HOC TIEP qua tung optimizer.step(), neu cache 1 lan luc
+        __init__ thi moi epoch sau se decode bang trong so NGAU NHIEN luc khoi
+        tao (bug that da xay ra tren Kaggle: dev_f1 dung sau epoch 1 nhung se
+        khong bao gio phan anh dung model dang hoc). Chi phi deepcopy 1 CRF
+        11x11 la khong dang ke so voi 1 lan forward BERT nen khong can toi uu."""
+        if not self.use_constrained_decode:
+            return None
+        from src.constrained_decode import build_constrained_crf
+        crf = build_constrained_crf(self.model.crf, self.label2id, scheme=self.constrained_scheme)
+        return crf.to(self.device)
+
+    def _decode(self, input_ids, attention_mask, token_type_ids, gaz_ids=None, constrained_crf=None):
         if self.use_constrained_decode:
             from src.constrained_decode import constrained_decode_batch
-            return constrained_decode_batch(self.model, self.constrained_crf,
+            return constrained_decode_batch(self.model, constrained_crf,
                                              input_ids, attention_mask, token_type_ids)
         return self.model(input_ids, attention_mask, token_type_ids, gaz_ids=gaz_ids)
 
@@ -66,6 +78,11 @@ class Evaluator:
     def evaluate(self, loader) -> tuple:
         self.model.eval()
         all_preds, all_labels = [], []
+        # Build 1 LAN cho ca vong lap (khong phai moi batch) -- van la SNAPSHOT
+        # moi cua model.crf hien tai (xem property constrained_crf), dam bao
+        # phan anh dung trong so DA HOC den thoi diem goi evaluate() nay (moi
+        # epoch/moi lan goi se tu lay lai, khong bi ket dinh vao 1 thoi diem cu).
+        constrained_crf = self.constrained_crf
 
         for batch in tqdm(loader, desc="  eval ", leave=False, dynamic_ncols=True):
             input_ids      = batch["input_ids"].to(self.device)
@@ -76,7 +93,8 @@ class Evaluator:
             if gaz_ids is not None:
                 gaz_ids = gaz_ids.to(self.device)
 
-            preds = self._decode(input_ids, attention_mask, token_type_ids, gaz_ids=gaz_ids)
+            preds = self._decode(input_ids, attention_mask, token_type_ids, gaz_ids=gaz_ids,
+                                  constrained_crf=constrained_crf)
 
             for pred_seq, label_seq, mask in zip(preds, labels, attention_mask):
                 true_tags, pred_tags = [], []
@@ -125,6 +143,7 @@ class Evaluator:
         errors       = defaultdict(list)
         fp_by_type   = defaultdict(int)
         fn_by_type   = defaultdict(int)
+        constrained_crf = self.constrained_crf
 
         for batch in tqdm(loader, desc="  error analysis", leave=False):
             input_ids      = batch["input_ids"].to(self.device)
@@ -134,7 +153,8 @@ class Evaluator:
             gaz_ids        = batch.get("gaz_ids", None)
             if gaz_ids is not None:
                 gaz_ids = gaz_ids.to(self.device)
-            preds          = self._decode(input_ids, attention_mask, token_type_ids, gaz_ids=gaz_ids)
+            preds          = self._decode(input_ids, attention_mask, token_type_ids, gaz_ids=gaz_ids,
+                                           constrained_crf=constrained_crf)
 
             for pred_seq, label_seq, mask in zip(preds, labels, attention_mask):
                 true_tags, pred_tags = [], []
@@ -176,6 +196,7 @@ class Evaluator:
         label2idx  = {l: i for i, l in enumerate(label_list)}
         n  = len(label_list)
         cm = np.zeros((n, n), dtype=int)
+        constrained_crf = self.constrained_crf
 
         for batch in tqdm(loader, desc="  confusion", leave=False):
             input_ids      = batch["input_ids"].to(self.device)
@@ -185,7 +206,8 @@ class Evaluator:
             gaz_ids        = batch.get("gaz_ids", None)
             if gaz_ids is not None:
                 gaz_ids = gaz_ids.to(self.device)
-            preds          = self._decode(input_ids, attention_mask, token_type_ids, gaz_ids=gaz_ids)
+            preds          = self._decode(input_ids, attention_mask, token_type_ids, gaz_ids=gaz_ids,
+                                           constrained_crf=constrained_crf)
 
             for pred_seq, label_seq, mask in zip(preds, labels, attention_mask):
                 for p, l, m in zip(pred_seq, label_seq.tolist(), mask.tolist()):
