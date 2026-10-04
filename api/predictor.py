@@ -1,5 +1,5 @@
 """
-Predictor — loads model once at startup and exposes predict().
+Predictor — loads model once at startup and exposes predict() / predict_document().
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ logger = logging.getLogger("api.predictor")
 
 BACKBONE   = os.getenv("BACKBONE",   "ethanyt/guwenbert-base")
 CKPT_PATH  = os.getenv("CHECKPOINT_PATH",  "outputs/ancient/guwenbert_crf/best.pt")
-LABEL_MAP  = os.getenv("LABEL_MAP",  "outputs/ancient/guwenbert_crf/label_map.json")
+LABEL_MAP  = os.getenv("LABEL_MAP_PATH", os.getenv("LABEL_MAP", "outputs/ancient/guwenbert_crf/label_map.json"))
 MAX_LEN    = int(os.getenv("MAX_LEN", "128"))
 DEVICE     = torch.device(os.getenv("DEVICE",  "cpu"))
 
@@ -120,3 +120,42 @@ class Predictor:
             })
 
         return entities
+
+    def predict_document(self, sentences: List[str]) -> List[List[Dict]]:
+        """
+        Predict NER entities for a list of consecutive sentences.
+
+        Sentences are joined and re-cut into windows of <= MAX_LEN - 2 chars
+        (preferring sentence-final marks, then commas) so that short sentences
+        keep their context and long ones are not truncated. Entities are then
+        mapped back to per-sentence offsets.
+        """
+        full = "".join(sentences)
+        max_chars = MAX_LEN - 2
+
+        doc_entities: List[Dict] = []
+        start = 0
+        while start < len(full):
+            end = min(start + max_chars, len(full))
+            if end < len(full):
+                cut = max(full.rfind(p, start, end) for p in "。？！；?!;")
+                if cut <= start:
+                    cut = max(full.rfind(p, start, end) for p in "，、：,:")
+                if cut > start:
+                    end = cut + 1
+            for ent in self.predict(full[start:end]):
+                doc_entities.append({**ent, "start": ent["start"] + start, "end": ent["end"] + start})
+            start = end
+
+        results: List[List[Dict]] = []
+        offset = 0
+        for sent in sentences:
+            sent_end = offset + len(sent)
+            ents = []
+            for ent in doc_entities:
+                if offset <= ent["start"] < sent_end:
+                    s, e = ent["start"] - offset, min(ent["end"], sent_end) - offset
+                    ents.append({"text": sent[s:e], "label": ent["label"], "start": s, "end": e})
+            results.append(ents)
+            offset = sent_end
+        return results
