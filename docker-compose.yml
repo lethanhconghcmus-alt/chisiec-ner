@@ -1,11 +1,9 @@
-version: "3.9"
-
 services:
   ancient-chinese-ner:
     platform: linux/x86_64
 
     build:
-      context: ./ancient-chinese-ner
+      context: .
       dockerfile: Dockerfile
 
     container_name: meta-ancient-chinese-ner
@@ -13,14 +11,17 @@ services:
 
     environment:
       - TZ=Asia/Ho_Chi_Minh
-      - WORKERS=4
       - CHECKPOINT_PATH=/app/checkpoints/best.pt
       - LABEL_MAP_PATH=/app/artifacts/label_map.json
 
     volumes:
-      - ./ancient-chinese-ner/checkpoints:/app/checkpoints
-      - ./ancient-chinese-ner/artifacts:/app/artifacts
+      - ./checkpoints:/app/checkpoints
+      - ./artifacts:/app/artifacts
+      # HuggingFace models (GuwenBERT + segmentation) are downloaded once and kept here
+      - hf-cache:/root/.cache/huggingface
 
     ports:
-      - "9001:9001"
- 
+      - "9001:8000"
+
+volumes:
+  hf-cache:

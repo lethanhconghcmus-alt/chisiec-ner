@@ -51,22 +51,53 @@ Expected runtime paths:
 
 ---
 
-## Run API
+## Deploy (server)
 
-### Local
+### 1. Get the code
 
 ```bash
-uvicorn api.main:app --host 0.0.0.0 --port 8000
+git clone https://github.com/clc-hcmus-edu-vn/ancient-chinese-ner.git
+cd ancient-chinese-ner
 ```
 
-### Docker
+### 2. Get the model weights
+
+`best.pt` is attached to the GitHub Release [`model-v1.0`](https://github.com/clc-hcmus-edu-vn/ancient-chinese-ner/releases/tag/model-v1.0)
+(repo members only):
 
 ```bash
-docker build -t ancient-ner .
+mkdir -p checkpoints
+gh release download model-v1.0 -R clc-hcmus-edu-vn/ancient-chinese-ner -p best.pt -D checkpoints/
+```
 
-docker run -p 8000:8000 \
-  -v /path/to/checkpoints:/app/checkpoints \
-  ancient-ner
+Or download `best.pt` from the release page in a browser and put it at `checkpoints/best.pt`.
+
+### 3. Start
+
+```bash
+docker compose up -d --build
+docker compose logs -f          # first start downloads ~1.2GB of HuggingFace models
+curl localhost:9001/health      # wait for model_loaded and segmenter_loaded = true
+```
+
+The API is served on port **9001** (`http://<server>:9001`, Swagger UI at `/docs`).
+HuggingFace models are cached in the `hf-cache` volume, so restarts do not re-download them.
+The server needs internet access on first start, and about 3GB RAM.
+
+### Update
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+---
+
+## Run API locally
+
+```bash
+CHECKPOINT_PATH=checkpoints/best.pt LABEL_MAP_PATH=artifacts/label_map.json \
+  uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
 
 ---
@@ -183,5 +214,5 @@ Set `"auto_segment": false` to keep the input punctuation (split on newlines and
 ## Notes
 
 - `best.pt` must match `label_map.json`
-- Model weights are loaded from a mounted volume - not included in this repository
+- Model weights are loaded from a mounted volume - not included in this repository (see GitHub Releases)
 - Repository contains only code and lightweight artifacts
