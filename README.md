@@ -100,17 +100,19 @@ chọn model ngắt câu (`guwen-punc` / `biaodian` / giữ nguyên), chọn nhi
 xem âm Hán Việt dưới mỗi câu, đối chiếu với true label, và chấm P/R/F1 trên 54 đoạn gold.
 
 ```bash
-git clone -b feature/segment-api https://github.com/clc-hcmus-edu-vn/ancient-chinese-ner.git
-cd ancient-chinese-ner
+git clone -b feature/segment-api https://github.com/lethanhconghcmus-alt/chisiec-ner.git
+cd chisiec-ner
 pip install -r requirements.txt
 
-# model NER (GuwenBERT+CRF · TQ) — cần quyền truy cập repo
+# model NER (GuwenBERT+CRF · TQ, 397MB)
 mkdir -p checkpoints
-gh release download model-v1.0 -R clc-hcmus-edu-vn/ancient-chinese-ner -p best.pt -D checkpoints/
-# (hoặc tải best.pt từ trang Releases bằng trình duyệt rồi đặt vào checkpoints/best.pt)
+curl -L -o checkpoints/best.pt \
+  https://github.com/lethanhconghcmus-alt/chisiec-ner/releases/download/model-v1.0/best.pt
 
 ./run_web.sh                 # → http://localhost:8000   (đổi cổng: PORT=8010 ./run_web.sh)
 ```
+
+Windows: chạy `python -m uvicorn web.app:app --port 8000` thay cho `./run_web.sh`.
 
 - Lần đầu chạy sẽ tải các model từ HuggingFace (GuwenBERT, guwen-punc, guwen-ner… ~1.6GB),
   mỗi model chỉ tải khi được chọn lần đầu. Cần ~4GB RAM; Mac M-series dùng MPS, có NVIDIA thì dùng CUDA.
