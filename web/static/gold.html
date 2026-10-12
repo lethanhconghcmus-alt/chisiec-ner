@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>True label</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  .picker { display: flex; gap: 6px; flex-wrap: wrap; }
+  .picker button { min-width: 40px; padding: 6px 10px; }
+  .picker button:not(.on) { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  .meta { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+  .sino { color: var(--muted); font-size: 13px; margin-top: 12px; white-space: pre-line; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>True label</h1>
+    <span class="status" id="src"></span>
+  </header>
+
+  <div class="panel">
+    <div class="picker" id="picker"></div>
+    <div class="controls">
+      <button id="open-model">Chạy model trên đoạn này ↗</button>
+      <button class="ghost" id="copy">Copy văn bản thô</button>
+      <span class="status" id="msg"></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="legend" id="legend"></div>
+    <div id="view" style="margin-top:12px"></div>
+    <p class="meta" id="missing"></p>
+    <details><summary class="meta">Phiên âm Hán Việt</summary><div class="sino" id="sino"></div></details>
+  </div>
+</div>
+
+<script>
+const TYPES = { PER: "Nhân danh", LOC: "Địa danh", ORG: "Tổ chức", DTM: "Thời gian", TITLE: "Chức quan" };
+const $ = s => document.querySelector(s);
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let docs = [], cur = null, hidden = new Set();
+
+function highlight(text, ents, offset) {
+  let html = "", pos = 0;
+  for (const e of ents) {
+    if (hidden.has(e.label)) continue;
+    const s = e.start - offset, t = e.end - offset;
+    html += esc(text.slice(pos, s));
+    html += `<mark style="border-color:var(--${e.label})" title="${TYPES[e.label] || e.label}">${esc(text.slice(s, t))}<sub style="color:var(--${e.label})">${e.label}</sub></mark>`;
+    pos = t;
+  }
+  return html + esc(text.slice(pos));
+}
+
+function render() {
+  const d = cur, counts = {};
+  d.entities.forEach(e => counts[e.label] = (counts[e.label] || 0) + 1);
+  $("#legend").innerHTML = Object.keys(TYPES).map(t =>
+    `<label><input type="checkbox" data-type="${t}" ${hidden.has(t) ? "" : "checked"}>
+       <span style="background:var(--${t})">${t}</span> ${TYPES[t]} (${counts[t] || 0})</label>`).join("");
+  $("#legend").querySelectorAll("input").forEach(cb => cb.onchange = () => {
+    cb.checked ? hidden.delete(cb.dataset.type) : hidden.add(cb.dataset.type); render();
+  });
+  // tách theo câu gốc (。) — span nằm gọn trong câu vì nhãn không vượt dấu câu
+  let off = 0, rows = [];
+  d.text.split(/(?<=。)/).forEach((s, i) => {
+    const ents = d.entities.filter(e => e.start >= off && e.end <= off + s.length);
+    rows.push(`<div class="sent"><div class="num">${i + 1}</div><div class="han">${highlight(s, ents, off)}</div></div>`);
+    off += s.length;
+  });
+  $("#view").innerHTML = rows.join("");
+  $("#missing").textContent = d.missing.length
+    ? `Nhãn có trong Excel nhưng không khớp chữ nào trong đoạn (thường do dị thể): ${d.missing.join("、")}` : "";
+  $("#sino").textContent = d.sino || "";
+  document.querySelectorAll("#picker button").forEach(b => b.classList.toggle("on", b.dataset.id == d.id));
+  $("#msg").textContent = `Dòng ${d.row} trong Excel · ${d.raw.length} chữ · ${d.entities.length} thực thể`;
+  history.replaceState(null, "", `?doc=${d.id}`);
+}
+
+$("#open-model").onclick = () => window.open(`/?gold=${cur.id}`, "model");
+$("#copy").onclick = () => navigator.clipboard.writeText(cur.raw).then(() => $("#msg").textContent = "Đã copy văn bản thô");
+
+fetch("/static/gold.json").then(r => r.json()).then(g => {
+  docs = g.docs;
+  $("#src").textContent = `Nguồn: ${g.source} · ${docs.length} đoạn`;
+  $("#picker").innerHTML = docs.map(d => `<button data-id="${d.id}">${d.id}</button>`).join("");
+  $("#picker").querySelectorAll("button").forEach(b => b.onclick = () => { cur = docs.find(d => d.id == b.dataset.id); render(); });
+  const want = new URLSearchParams(location.search).get("doc");
+  cur = docs.find(d => String(d.id) === want) || docs[0];
+  render();
+}).catch(() => $("#src").textContent = "Chưa có gold.json — chạy web/make_gold.py trước");
+</script>
+</body>
+</html>

@@ -1,0 +1,1176 @@
+{
+ "source": "NER 1288-1388.xlsx",
+ "docs": [
+  {
+   "row": 19,
+   "text": "居排禀。清化承宣使進野繭成絲一筐。帝却之。勑旨各衛門󰱇儒吏出亲除各職並詳所管從公察枸。各縣正官有鈌如無科目許以中叁塲調除。明安平州土官李璘領兵八千马三百疋來侵。夏琅州璘戰敗退還本州分兵守界土。首鎮守官陶院黎伯達等乞致書于璘問其興兵之由。帝許之。十六日大臣百官上表勸進帝批云黄帝之號朕未敢言。皇上之稱於羣臣嗣皇之稱於太廟亦足以别諸王之號。若比之言卿當擬定。數年後。",
+   "raw": "居排禀清化承宣使進野繭成絲一筐帝却之勑旨各衛門󰱇儒吏出亲除各職並詳所管從公察枸各縣正官有鈌如無科目許以中叁塲調除明安平州土官李璘領兵八千马三百疋來侵夏琅州璘戰敗退還本州分兵守界土首鎮守官陶院黎伯達等乞致書于璘問其興兵之由帝許之十六日大臣百官上表勸進帝批云黄帝之號朕未敢言皇上之稱於羣臣嗣皇之稱於太廟亦足以别諸王之號若比之言卿當擬定數年後",
+   "sino": "cư Bài Lẫm.\n Thanh Hoá Thừa tuyên sứ tiến dã kiển thành ti nhất khuông.\n Đế khước chi.\n Sắc chỉ các vệ môn tuyển nho lại xuất thân trừ các chức tịnh tường sở quản tòng công sát cử.\n Các huyện chính quan hữu khuyết như vô khoa mục hứa dĩ trúng tam trường điều trừ.\n Minh An Bình châu thổ quan Lí Lân lĩnh binh bát thiên, mã tam bách sất lai xâm.\n Hạ Lang châu Lân chiến bại, thoái hoàn bản châu, phân binh thủ giới thổ.\n Thủ trấn thủ quan Đào Viện, Lê Bá Đạt đẳng khất trí thư vu Lân vấn kì hưng binh chi do.\n Đế hứa chi.\n Thập lục nhật, đại thần bách quan thượng biểu khuyên tiến đế phê vân: Hoàng đế chi hiệu trẫm vị cảm ngôn.\n Hoàng thượng chi xưng, ư quần thần tự hoàng chi xưng, ư Thái miếu diệc túc dĩ biệt chư vương chi hiệu.\n Nhược tỉ chi ngôn khanh đương nghĩ định.\n Sổ niên hậu .",
+   "entities": [
+    {
+     "label": "LOC",
+     "start": 4,
+     "end": 6,
+     "text": "清化"
+    },
+    {
+     "label": "ORG",
+     "start": 23,
+     "end": 26,
+     "text": "各衛門"
+    },
+    {
+     "label": "ORG",
+     "start": 43,
+     "end": 47,
+     "text": "各縣正官"
+    },
+    {
+     "label": "LOC",
+     "start": 61,
+     "end": 65,
+     "text": "明安平州"
+    },
+    {
+     "label": "PER",
+     "start": 67,
+     "end": 69,
+     "text": "李璘"
+    },
+    {
+     "label": "LOC",
+     "start": 80,
+     "end": 83,
+     "text": "夏琅州"
+    },
+    {
+     "label": "PER",
+     "start": 100,
+     "end": 102,
+     "text": "陶院"
+    },
+    {
+     "label": "PER",
+     "start": 102,
+     "end": 105,
+     "text": "黎伯達"
+    },
+    {
+     "label": "DTM",
+     "start": 122,
+     "end": 125,
+     "text": "十六日"
+    },
+    {
+     "label": "TITLE",
+     "start": 145,
+     "end": 147,
+     "text": "皇上"
+    },
+    {
+     "label": "ORG",
+     "start": 157,
+     "end": 159,
+     "text": "太廟"
+    },
+    {
+     "label": "DTM",
+     "start": 177,
+     "end": 179,
+     "text": "數年"
+    }
+   ],
+   "missing": [
+    "皇帝"
+   ],
+   "id": 1
+  },
+  {
+   "row": 20,
+   "text": "如見天順於上民安於下雨若風綢大懷小畏凣徽號始可與謀。卿等其熟思之。十九日大臣文武百官復上表勸進曰陛下既履至尊宜稱皇帝。上不從。爪哇國使神那盃等來見。冬十一月初五日朝退帝問大臣百官曰都督屈打前雖失律刑部方案問朕欲以總兵呼之使鎮守北平可乎太保阮耒曰生殺予奪人君之權非臣下敢論然。屈打奉命前功不成六科見劾刑部方按問。且待獄成如其無罪用之可也。刑部尚書黎伯籌獨。",
+   "raw": "如見天順於上民安於下雨若風綢大懷小畏凣徽號始可與謀卿等其熟思之十九日大臣文武百官復上表勸進曰陛下既履至尊宜稱皇帝上不從爪哇國使神那盃等來見冬十一月初五日朝退帝問大臣百官曰都督屈打前雖失律刑部方案問朕欲以總兵呼之使鎮守北平可乎太保阮耒曰生殺予奪人君之權非臣下敢論然屈打奉命前功不成六科見劾刑部方按問且待獄成如其無罪用之可也刑部尚書黎伯籌獨",
+   "sino": "như kiến thiên thuận ư thượng, dân an ư hạ vũ, nhược phong điều đại hoài tiểu uý phàm huy hiệu thuỷ khả dữ mưu.\n Khanh đẳng kì thục tư chi.\n Thập cửu nhật đại thần văn võ bách quan phục thượng biểu khuyên tiến viết: Bệ hạ ký lí chí tôn nghi xưng hoàng đế.\n Thượng bất tòng.\n Trảo OA quốc sứ thần Na Bôi đẳng lai kiến.\n Đông thập nhất nguyệt, sơ ngũ nhật, triều thoái, đế vấn đại thần bách quan viết: Đô đốc Khuất Đả tiền tuy thất luật Hình bộ phương án vấn, trẫm dục dĩ tổng binh hô chi sử trấn thủ Bắc Bình khả hồ? Thái Bảo Nguyễn Lỗi viết: Sinh sát dư đoạt nhân quân chi quyền, phi thần hạ cảm luận nhiên.\n Khuất Đả phụng mệnh tiền công bất thành, Lục khoa kiến hặc Hình bộ phương án vấn.\n Thả đãi ngục thành như kì vô tội dụng chi khả dã.\n Hình bộ thượng thư Lê Bá Trù độc .",
+   "entities": [
+    {
+     "label": "ORG",
+     "start": 5,
+     "end": 6,
+     "text": "上"
+    },
+    {
+     "label": "LOC",
+     "start": 9,
+     "end": 10,
+     "text": "下"
+    },
+    {
+     "label": "DTM",
+     "start": 33,
+     "end": 36,
+     "text": "十九日"
+    },
+    {
+     "label": "ORG",
+     "start": 43,
+     "end": 44,
+     "text": "上"
+    },
+    {
+     "label": "LOC",
+     "start": 49,
+     "end": 50,
+     "text": "下"
+    },
+    {
+     "label": "TITLE",
+     "start": 56,
+     "end": 58,
+     "text": "皇帝"
+    },
+    {
+     "label": "ORG",
+     "start": 59,
+     "end": 60,
+     "text": "上"
+    },
+    {
+     "label": "LOC",
+     "start": 63,
+     "end": 66,
+     "text": "爪哇國"
+    },
+    {
+     "label": "DTM",
+     "start": 74,
+     "end": 81,
+     "text": "冬十一月初五日"
+    },
+    {
+     "label": "ORG",
+     "start": 90,
+     "end": 92,
+     "text": "都督"
+    },
+    {
+     "label": "PER",
+     "start": 92,
+     "end": 94,
+     "text": "屈打"
+    },
+    {
+     "label": "ORG",
+     "start": 98,
+     "end": 100,
+     "text": "刑部"
+    },
+    {
+     "label": "LOC",
+     "start": 113,
+     "end": 115,
+     "text": "北平"
+    },
+    {
+     "label": "ORG",
+     "start": 117,
+     "end": 119,
+     "text": "太保"
+    },
+    {
+     "label": "PER",
+     "start": 119,
+     "end": 121,
+     "text": "阮耒"
+    },
+    {
+     "label": "LOC",
+     "start": 132,
+     "end": 133,
+     "text": "下"
+    },
+    {
+     "label": "PER",
+     "start": 137,
+     "end": 139,
+     "text": "屈打"
+    },
+    {
+     "label": "ORG",
+     "start": 149,
+     "end": 151,
+     "text": "刑部"
+    },
+    {
+     "label": "ORG",
+     "start": 168,
+     "end": 170,
+     "text": "刑部"
+    },
+    {
+     "label": "PER",
+     "start": 172,
+     "end": 175,
+     "text": "黎伯籌"
+    }
+   ],
+   "missing": [
+    "嘉興"
+   ],
+   "id": 2
+  },
+  {
+   "row": 23,
+   "text": "罸雖唐󰔄不能以治天下。今吾重寄托于汝汝惟勤成敦懿四字而已。汝將不黾勉讀書以𧥾明哲保身之道乎。命檢占人歸順户口及束約禁戢官私奴婢等項人。命東軍權右都督鄭公路等督五府軍砌皇城以皇城卑陋故也。降北道等處承宣使黎公恪等各一等以本處多蝗蟲不能先奏坐視民瘼也。申明功臣子孫還祖父姓。待制楊如珠以𭓇業不進出鴻臚寺丞。十二月甲午日冬祭初稱曰孝孫國皇。國皇之號自此始。",
+   "raw": "罸雖唐󰔄不能以治天下今吾重寄托于汝汝惟勤成敦懿四字而已汝將不黾勉讀書以𧥾明哲保身之道乎命檢占人歸順户口及束約禁戢官私奴婢等項人命東軍權右都督鄭公路等督五府軍砌皇城以皇城卑陋故也降北道等處承宣使黎公恪等各一等以本處多蝗蟲不能先奏坐視民瘼也申明功臣子孫還祖父姓待制楊如珠以𭓇業不進出鴻臚寺丞十二月甲午日冬祭初稱曰孝孫國皇國皇之號自此始",
+   "sino": "phạt tuy Đường Ngu bất năng dĩ trị thiên hạ.\n Kim ngô trọng ký thác vu nhữ, nhữ duy cần, thành, đôn, ý tứ tự nhi dĩ.\n Nhữ tương bất mãnh miễn độc thư dĩ thí minh triết bảo thân chi đạo hồ?.\n Mệnh kiểm Chiêm nhân quy thuận hộ khẩu cập thúc ước, cấm tập quan tư nô tì đẳng hạng nhân.\n Mệnh Đông quân quyền hữu đô đốc Trịnh Công Lộ đẳng đốc ngũ phủ quân thế hoàng thành, dĩ Hoàng thành ti lậu cố dã.\n Giáng Bắc đạo đẳng xứ Thừa tuyên sứ Lê Công Khác đẳng các nhất đẳng, dĩ bản xứ đa hoàng trùng bất năng tiên tấu toạ thị dân mạc dã.\n Thân minh công thần tử tôn hoàn tổ phụ tính.\n Đãi chế Dương Như Châu dĩ học nghiệp bất tiến xuất Hồng Lư tự thừa.\n Thập nhị nguyệt, Giáp Ngọ nhật, Đông tế sơ xưng viết: Hiếu tôn Quốc hoàng.\n Quốc hoàng chi hiệu tự thử thuỷ.",
+   "entities": [
+    {
+     "label": "LOC",
+     "start": 2,
+     "end": 4,
+     "text": "唐󰔄"
+    },
+    {
+     "label": "ORG",
+     "start": 48,
+     "end": 50,
+     "text": "占人"
+    },
+    {
+     "label": "ORG",
+     "start": 68,
+     "end": 70,
+     "text": "東軍"
+    },
+    {
+     "label": "PER",
+     "start": 74,
+     "end": 77,
+     "text": "鄭公路"
+    },
+    {
+     "label": "LOC",
+     "start": 83,
+     "end": 85,
+     "text": "皇城"
+    },
+    {
+     "label": "LOC",
+     "start": 86,
+     "end": 88,
+     "text": "皇城"
+    },
+    {
+     "label": "LOC",
+     "start": 94,
+     "end": 96,
+     "text": "北道"
+    },
+    {
+     "label": "PER",
+     "start": 101,
+     "end": 104,
+     "text": "黎公恪"
+    },
+    {
+     "label": "PER",
+     "start": 137,
+     "end": 140,
+     "text": "楊如珠"
+    },
+    {
+     "label": "LOC",
+     "start": 146,
+     "end": 149,
+     "text": "鴻臚寺"
+    },
+    {
+     "label": "DTM",
+     "start": 151,
+     "end": 154,
+     "text": "十二月"
+    },
+    {
+     "label": "DTM",
+     "start": 154,
+     "end": 157,
+     "text": "甲午日"
+    },
+    {
+     "label": "TITLE",
+     "start": 164,
+     "end": 166,
+     "text": "國皇"
+    },
+    {
+     "label": "TITLE",
+     "start": 167,
+     "end": 169,
+     "text": "國皇"
+    }
+   ],
+   "missing": [],
+   "id": 3
+  },
+  {
+   "row": 27,
+   "text": "縣阮仁浹陶舜󰁮員外郎范如籃奏使陳季暄並入秘書監讀書以中宏詞科故也。召應試官范柰等二十員人入鳯󰀩堂。帝自命題試之。九日帝命吏部尚書阮如堵選内外各衛門有仁恕明𠃔者類取姓名代除刑部郎中員外范柰譚文通等。時獄多寃濫往徃於公朝鳴訴帝益厭之故有是命。勑停砌宫城以屡奏不登米價騰踊故緩之。免瀕海軍人明年大集以八九月間颶𧔧大作海水漲溢瀕海民屋房漂没故也。賞秘書監。",
+   "raw": "縣阮仁浹陶舜󰁮員外郎范如籃奏使陳季暄並入秘書監讀書以中宏詞科故也召應試官范柰等二十員人入鳯󰀩堂帝自命題試之九日帝命吏部尚書阮如堵選内外各衛門有仁恕明𠃔者類取姓名代除刑部郎中員外范柰譚文通等時獄多寃濫往徃於公朝鳴訴帝益厭之故有是命勑停砌宫城以屡奏不登米價騰踊故緩之免瀕海軍人明年大集以八九月間颶𧔧大作海水漲溢瀕海民屋房漂没故也賞秘書監",
+   "sino": "huyện Nguyễn Nhân Tiếp, Đào Thuấn Cử, Viên ngoại lang Phạm Như Lam, Tấu sứ Trần Quý Huyên tịnh nhập Bí thư giám độc thư, dĩ trúng Hoành từ khoa cố dã.\n Triệu ứng thí quan Phạm Nại đẳng nhị thập viên nhân nhập Phụng Nghi đường.\n Đế tự mệnh đề thí chi.\n Cửu nhật, đế mệnh Lại bộ thượng thư Nguyễn Như Đổ tuyển nội ngoại các vệ môn hữu nhân thứ minh doãn giả loại thủ tính danh đại trừ Hình bộ lang trung viên ngoại Phạm Nại, Đàm Văn Thông đẳng.\n Thời ngục đa oan lạm, vãng vãng ư công triều, minh tố đế ích yếm chi cố hữu thị mệnh.\n Sắc đình thế cung thành, dĩ lũ tấu bất đăng, mễ giá đằng dũng, cố hoãn chi.\n Miễn tần hải quân nhân minh niên đại tập, dĩ bát, cửu nguyệt gian cụ phong đại tác, hải thuỷ trướng dật, tần hải dân ốc phòng phiêu một cố dã.\n Thưởng bí thư giám .",
+   "entities": [
+    {
+     "label": "LOC",
+     "start": 0,
+     "end": 1,
+     "text": "縣"
+    },
+    {
+     "label": "PER",
+     "start": 1,
+     "end": 4,
+     "text": "阮仁浹"
+    },
+    {
+     "label": "TITLE",
+     "start": 7,
+     "end": 10,
+     "text": "員外郎"
+    },
+    {
+     "label": "PER",
+     "start": 10,
+     "end": 13,
+     "text": "范如籃"
+    },
+    {
+     "label": "TITLE",
+     "start": 13,
+     "end": 15,
+     "text": "奏使"
+    },
+    {
+     "label": "PER",
+     "start": 15,
+     "end": 18,
+     "text": "陳季暄"
+    },
+    {
+     "label": "ORG",
+     "start": 20,
+     "end": 23,
+     "text": "秘書監"
+    },
+    {
+     "label": "PER",
+     "start": 37,
+     "end": 39,
+     "text": "范柰"
+    },
+    {
+     "label": "DTM",
+     "start": 56,
+     "end": 58,
+     "text": "九日"
+    },
+    {
+     "label": "ORG",
+     "start": 60,
+     "end": 62,
+     "text": "吏部"
+    },
+    {
+     "label": "TITLE",
+     "start": 62,
+     "end": 64,
+     "text": "尚書"
+    },
+    {
+     "label": "PER",
+     "start": 64,
+     "end": 67,
+     "text": "阮如堵"
+    },
+    {
+     "label": "LOC",
+     "start": 85,
+     "end": 87,
+     "text": "刑部"
+    },
+    {
+     "label": "PER",
+     "start": 91,
+     "end": 93,
+     "text": "范柰"
+    },
+    {
+     "label": "PER",
+     "start": 93,
+     "end": 96,
+     "text": "譚文通"
+    },
+    {
+     "label": "ORG",
+     "start": 99,
+     "end": 100,
+     "text": "獄"
+    },
+    {
+     "label": "LOC",
+     "start": 138,
+     "end": 140,
+     "text": "瀕海"
+    },
+    {
+     "label": "DTM",
+     "start": 147,
+     "end": 148,
+     "text": "八"
+    },
+    {
+     "label": "DTM",
+     "start": 148,
+     "end": 150,
+     "text": "九月"
+    },
+    {
+     "label": "LOC",
+     "start": 159,
+     "end": 161,
+     "text": "瀕海"
+    },
+    {
+     "label": "ORG",
+     "start": 170,
+     "end": 173,
+     "text": "秘書監"
+    }
+   ],
+   "missing": [
+    "陶舜𢮄",
+    "鳯凰堂"
+   ],
+   "id": 4
+  },
+  {
+   "row": 30,
+   "text": "安先知之。且為輔導之官便行僥倖之險。是爾不殺吾而吾所不報也。然吾不負於爾有六而爾之負於吾已十有一矣。爾是奸臣矣是亂臣矣是賊臣矣。夏四月旱勑諭公侯伯官員百姓等凣九條以裴白良范溥為皇太子侍講。六月色旨禮部議定民間諸文字格式頒行天下。定祈雨祈晴儀註秋七月諭吏部尚書阮如堵太和年一刑部大夫二員斷天下訟多留滯。前年予置一刑三員或四員云何今置一刑二員哉爾吏部速揀。",
+   "raw": "安先知之且為輔導之官便行僥倖之險是爾不殺吾而吾所不報也然吾不負於爾有六而爾之負於吾已十有一矣爾是奸臣矣是亂臣矣是賊臣矣夏四月旱勑諭公侯伯官員百姓等凣九條以裴白良范溥為皇太子侍講六月色旨禮部議定民間諸文字格式頒行天下定祈雨祈晴儀註秋七月諭吏部尚書阮如堵太和年一刑部大夫二員斷天下訟多留滯前年予置一刑三員或四員云何今置一刑二員哉爾吏部速揀",
+   "sino": "An tiên tri chi? Thả vi phụ đạo chi quan, tiện hành nhiêu hạnh chi hiểm.\n Thị nhĩ bất sát ngô nhi ngô sở bất báo dã.\n Nhiên ngô bất phụ ư nhĩ hữu lục nhi nhĩ chi phụ ư ngô dĩ thập hữu nhất hĩ.\n Nhĩ thị gian thần hĩ, thị loạn thần hĩ, thị tặc thần hĩ! Hạ tứ nguyệt, hạn, sắc dụ công hầu, bá quan viên, bách tính đẳng phàm cửu điều: dĩ Bùi Bạch Lương, Phạm Phổ vi Hoàng thái tử thị giảng.\n Lục nguyệt, sắc chỉ Lễ bộ nghị định dân gian chư văn tự cách thức ban hành thiên hạ.\n Định kì vũ kì tình nghi chú Thu thất nguyệt, dụ Lại bộ thượng thư Nguyễn Như Đổ: Thái Hoà niên nhất Hình bộ đại phu nhị viên, đoạn thiên hạ tụng đa lưu đái.\n Tiền niên, dư trí nhất hình tam viên, hoặc tứ viên, vân hà kim trí nhất hình nhị viên tai? Nhĩ Lại bộ tốc giản .",
+   "entities": [
+    {
+     "label": "LOC",
+     "start": 0,
+     "end": 1,
+     "text": "安"
+    },
+    {
+     "label": "ORG",
+     "start": 7,
+     "end": 11,
+     "text": "輔導之官"
+    },
+    {
+     "label": "DTM",
+     "start": 64,
+     "end": 67,
+     "text": "夏四月"
+    },
+    {
+     "label": "PER",
+     "start": 82,
+     "end": 85,
+     "text": "裴白良"
+    },
+    {
+     "label": "PER",
+     "start": 85,
+     "end": 87,
+     "text": "范溥"
+    },
+    {
+     "label": "TITLE",
+     "start": 88,
+     "end": 91,
+     "text": "皇太子"
+    },
+    {
+     "label": "DTM",
+     "start": 94,
+     "end": 96,
+     "text": "六月"
+    },
+    {
+     "label": "ORG",
+     "start": 98,
+     "end": 100,
+     "text": "禮部"
+    },
+    {
+     "label": "LOC",
+     "start": 111,
+     "end": 113,
+     "text": "天下"
+    },
+    {
+     "label": "ORG",
+     "start": 125,
+     "end": 127,
+     "text": "吏部"
+    },
+    {
+     "label": "PER",
+     "start": 129,
+     "end": 132,
+     "text": "阮如堵"
+    },
+    {
+     "label": "LOC",
+     "start": 132,
+     "end": 135,
+     "text": "太和年"
+    },
+    {
+     "label": "ORG",
+     "start": 136,
+     "end": 138,
+     "text": "刑部"
+    },
+    {
+     "label": "LOC",
+     "start": 143,
+     "end": 145,
+     "text": "天下"
+    },
+    {
+     "label": "ORG",
+     "start": 171,
+     "end": 173,
+     "text": "吏部"
+    }
+   ],
+   "missing": [],
+   "id": 5
+  },
+  {
+   "row": 31,
+   "text": "閑住在朝在外官員剛柔相濟才長鞠獄置每刑員外三員。八月扈從籃京。帝𭁈皇太子及祈郡公黎念並從臣黎弘毓杜潤郭廷寶等君臣賡𰙔作英花孝治詩集有擲地金聲之句。十三日諭吏部尚書阮如堵等爾固請以教授為縣官姦計生矣。教授當久厥任以責人才之效敢有遷移其罪不小。九月勑旨今後某申寃訴枉等該衙門勘而無寃枉者聽杖八十罸錢五貫。諭阮如堵等觀陳封之為人色厲内荏易語輕言。至若謟事。",
+   "raw": "閑住在朝在外官員剛柔相濟才長鞠獄置每刑員外三員八月扈從籃京帝𭁈皇太子及祈郡公黎念並從臣黎弘毓杜潤郭廷寶等君臣賡𰙔作英花孝治詩集有擲地金聲之句十三日諭吏部尚書阮如堵等爾固請以教授為縣官姦計生矣教授當久厥任以責人才之效敢有遷移其罪不小九月勑旨今後某申寃訴枉等該衙門勘而無寃枉者聽杖八十罸錢五貫諭阮如堵等觀陳封之為人色厲内荏易語輕言至若謟事",
+   "sino": "nhàn chú tại triều tại ngoại quan viên, cương nhu tương tế tài, trưởng cúc ngục trí mỗi hình viên ngoại tam viên.\n Bát nguyệt, Hộ tòng Lam Kinh.\n Đế dữ Hoàng thái tử cập Kì quận công Lê Niệm tịnh tòng thần Lê Hoằng Dục, Đỗ Nhuận, Quách Đình Bảo đẳng quân thần canh ca tác Ánh hoa hiếu trị thi tập, hữu trịch địa kim thanh chi câu.\n Thập tam nhật, dụ Lại bộ thượng thư Nguyễn Như Đổ đẳng: Nhĩ cố thỉnh dĩ giáo thụ vi huyện quan, gian kế sinh hĩ.\n Giáo thụ đáng cửu quyết nhiệm dĩ trách nhân tài chi hiệu, cảm hữu thiên di kì tội bất tiểu.\n Cửu nguyệt, sắc chỉ: kim hậu, mỗ thân oan tố uổng đẳng cai nha môn khám nhi vô oan uổng giả thính trượng bát thập, phạt tiền ngũ quán.\n Dụ Nguyễn Như Đổ đẳng quan: Trần Phong chi vi nhân sắc lệ, nội nhẫm dị ngữ khinh ngôn.\n Chí nhược xiểm sự .",
+   "entities": [
+    {
+     "label": "ORG",
+     "start": 3,
+     "end": 4,
+     "text": "朝"
+    },
+    {
+     "label": "ORG",
+     "start": 6,
+     "end": 8,
+     "text": "官員"
+    },
+    {
+     "label": "DTM",
+     "start": 24,
+     "end": 26,
+     "text": "八月"
+    },
+    {
+     "label": "LOC",
+     "start": 28,
+     "end": 30,
+     "text": "籃京"
+    },
+    {
+     "label": "TITLE",
+     "start": 33,
+     "end": 36,
+     "text": "皇太子"
+    },
+    {
+     "label": "TITLE",
+     "start": 38,
+     "end": 40,
+     "text": "郡公"
+    },
+    {
+     "label": "PER",
+     "start": 40,
+     "end": 42,
+     "text": "黎念"
+    },
+    {
+     "label": "PER",
+     "start": 45,
+     "end": 48,
+     "text": "黎弘毓"
+    },
+    {
+     "label": "PER",
+     "start": 48,
+     "end": 50,
+     "text": "杜潤"
+    },
+    {
+     "label": "PER",
+     "start": 50,
+     "end": 53,
+     "text": "郭廷寶"
+    },
+    {
+     "label": "DTM",
+     "start": 73,
+     "end": 76,
+     "text": "十三日"
+    },
+    {
+     "label": "TITLE",
+     "start": 79,
+     "end": 81,
+     "text": "尚書"
+    },
+    {
+     "label": "PER",
+     "start": 81,
+     "end": 84,
+     "text": "阮如堵"
+    },
+    {
+     "label": "ORG",
+     "start": 89,
+     "end": 91,
+     "text": "教授"
+    },
+    {
+     "label": "LOC",
+     "start": 92,
+     "end": 93,
+     "text": "縣"
+    },
+    {
+     "label": "ORG",
+     "start": 99,
+     "end": 101,
+     "text": "教授"
+    },
+    {
+     "label": "DTM",
+     "start": 120,
+     "end": 122,
+     "text": "九月"
+    },
+    {
+     "label": "ORG",
+     "start": 133,
+     "end": 135,
+     "text": "衙門"
+    },
+    {
+     "label": "PER",
+     "start": 151,
+     "end": 154,
+     "text": "阮如堵"
+    },
+    {
+     "label": "PER",
+     "start": 156,
+     "end": 158,
+     "text": "陳封"
+    }
+   ],
+   "missing": [],
+   "id": 6
+  },
+  {
+   "row": 33,
+   "text": "無私杜塞賄賂。若是則吾得為知人之君爾得為盡忠之臣顯親揚名光于方󰀋顧不快哉不能如是則吾為不知人知君爾為尸位之臣矣二者惟爾擇其所從。冬十月二十八日帝諭在朝諸臣觀陳封之乞贖犯罪賍黎逋贖鯨是當者多賄而免殃貧者無緣而得罪敢違祖宗之法立恬終而贖鯨是朝廷怜才之恩敢作威福以害國也。大理寺按律治罪。以范溥為旨揮。溥中癸未科進士三上奏章願充武聀。帝嘉志足有為故以不次除。",
+   "raw": "無私杜塞賄賂若是則吾得為知人之君爾得為盡忠之臣顯親揚名光于方󰀋顧不快哉不能如是則吾為不知人知君爾為尸位之臣矣二者惟爾擇其所從冬十月二十八日帝諭在朝諸臣觀陳封之乞贖犯罪賍黎逋贖鯨是當者多賄而免殃貧者無緣而得罪敢違祖宗之法立恬終而贖鯨是朝廷怜才之恩敢作威福以害國也大理寺按律治罪以范溥為旨揮溥中癸未科進士三上奏章願充武聀帝嘉志足有為故以不次除",
+   "sino": "vô tư, đỗ tắc hối lộ.\n Nhược thị, tắc ngô đắc vi tri nhân chi quân, nhĩ đắc vi tận trung chi thần, hiển thân, dương danh, quang vu phương sách, cố bất khoái tai? Bất năng như thị tắc ngô vi bất tri nhân tri quân, nhĩ vi thi vị chi thần hĩ, nhị giả duy nhĩ trạch kì sở tòng.\n Đông thập nguyệt, nhị thập bát nhật, đế dụ tại triều chư thần: Quan Trần Phong chi khất thục phạm tội tang Lê Bô thục kình thị đáng giả đa hối nhi miễn, ương bần giả vô duyên nhi đắc tội, cảm vi tổ tông chi pháp, lập điềm chung nhi thục kình thị triều đình linh tài chi ân cảm tác uy phúc dĩ hại quốc dã.\n Đại lí tự án luật trị tội.\n Dĩ Phạm Phổ vi chỉ huy.\n Phổ trúng Quý Mùi khoa tiến sĩ, tam thượng tấu chương nguyện sung Vũ chức.\n Đế gia chí túc hữu vi, cố dĩ bất thứ trừ .",
+   "entities": [
+    {
+     "label": "DTM",
+     "start": 64,
+     "end": 65,
+     "text": "冬"
+    },
+    {
+     "label": "LOC",
+     "start": 65,
+     "end": 67,
+     "text": "十月"
+    },
+    {
+     "label": "DTM",
+     "start": 67,
+     "end": 71,
+     "text": "二十八日"
+    },
+    {
+     "label": "PER",
+     "start": 78,
+     "end": 80,
+     "text": "陳封"
+    },
+    {
+     "label": "PER",
+     "start": 86,
+     "end": 88,
+     "text": "黎逋"
+    },
+    {
+     "label": "ORG",
+     "start": 118,
+     "end": 120,
+     "text": "朝廷"
+    },
+    {
+     "label": "ORG",
+     "start": 133,
+     "end": 136,
+     "text": "大理寺"
+    },
+    {
+     "label": "PER",
+     "start": 142,
+     "end": 144,
+     "text": "范溥"
+    },
+    {
+     "label": "TITLE",
+     "start": 145,
+     "end": 147,
+     "text": "旨揮"
+    },
+    {
+     "label": "TITLE",
+     "start": 153,
+     "end": 155,
+     "text": "進士"
+    }
+   ],
+   "missing": [],
+   "id": 7
+  },
+  {
+   "row": 34,
+   "text": "之。十一月遣使如明。楊文旦范鑑黄仁等歲貢。謝種奏永安萬寧等州被虜撂事。勑諭御史陳鷟阮文質等爾奏謂内臣阮書朱德大楊明封吳閼潘宗禎俱以近習受賂法司持平罪當誅死。其何饒阮書罪而潘宗禎不饒公耶私耶是不信於天下。予聞阮武受賍死甘心矣予今不殺尚其他日改過而得驅使。且潘宗禎為内官賢假子賢死肉未寒烝賢之婦奪為以妾前年又𭁈宮女阮梅交狎二罪俱重死則宜矣。",
+   "raw": "之十一月遣使如明楊文旦范鑑黄仁等歲貢謝種奏永安萬寧等州被虜撂事勑諭御史陳鷟阮文質等爾奏謂内臣阮書朱德大楊明封吳閼潘宗禎俱以近習受賂法司持平罪當誅死其何饒阮書罪而潘宗禎不饒公耶私耶是不信於天下予聞阮武受賍死甘心矣予今不殺尚其他日改過而得驅使且潘宗禎為内官賢假子賢死肉未寒烝賢之婦奪為以妾前年又𭁈宮女阮梅交狎二罪俱重死則宜矣",
+   "sino": "chi.\n Thập nhất nguyệt, khiển sứ như Minh.\n Dương Văn Đán, Phạm Giám, Hoàng Nhân đẳng tuế cống.\n Tạ Chủng tấu Vĩnh An, Vạn Ninh đẳng châu bị lỗ lược sự.\n Sắc dụ Ngự sử Trần Xác, Nguyễn Văn Chất đẳng nhĩ tấu vị Nội thần Nguyễn Thư, Chu Đức Đại, Dương Minh Phong, Ngô Át, Phan Tông Trinh cụ dĩ cận tập thụ lộ, pháp ti trì bình, tội đáng tru tử.\n Kì hà nhiêu Nguyễn Thư tội nhi Phan Tông Trinh bất nhiêu công da? tư da? thị bất tín ư thiên hạ.\n Dư văn Nguyễn Vũ thụ tang tử cam tâm hĩ, dư kim bất sát thượng kì tha nhật cải quá nhi đắc khu sử.\n Thả Phan Tông Trinh vi nội quan Hiền giả tử, Hiền tử nhục vị hàn chưng, Hiền chi phụ đoạt vi dĩ thiếp; tiền niên hựu dữ cung nữ Nguyễn Mai giao hiệp, nhị tội cụ trọng, tử tắc nghi hĩ.",
+   "entities": [
+    {
+     "label": "DTM",
+     "start": 2,
+     "end": 5,
+     "text": "十一月"
+    },
+    {
+     "label": "PER",
+     "start": 10,
+     "end": 13,
+     "text": "楊文旦"
+    },
+    {
+     "label": "PER",
+     "start": 13,
+     "end": 15,
+     "text": "范鑑"
+    },
+    {
+     "label": "PER",
+     "start": 21,
+     "end": 23,
+     "text": "謝種"
+    },
+    {
+     "label": "LOC",
+     "start": 24,
+     "end": 26,
+     "text": "永安"
+    },
+    {
+     "label": "LOC",
+     "start": 26,
+     "end": 28,
+     "text": "萬寧"
+    },
+    {
+     "label": "ORG",
+     "start": 37,
+     "end": 39,
+     "text": "御史"
+    },
+    {
+     "label": "ORG",
+     "start": 48,
+     "end": 50,
+     "text": "内臣"
+    },
+    {
+     "label": "PER",
+     "start": 50,
+     "end": 52,
+     "text": "阮書"
+    },
+    {
+     "label": "PER",
+     "start": 52,
+     "end": 55,
+     "text": "朱德大"
+    },
+    {
+     "label": "PER",
+     "start": 55,
+     "end": 58,
+     "text": "楊明封"
+    },
+    {
+     "label": "PER",
+     "start": 58,
+     "end": 60,
+     "text": "吳閼"
+    },
+    {
+     "label": "PER",
+     "start": 60,
+     "end": 63,
+     "text": "潘宗禎"
+    },
+    {
+     "label": "PER",
+     "start": 81,
+     "end": 83,
+     "text": "阮書"
+    },
+    {
+     "label": "PER",
+     "start": 85,
+     "end": 88,
+     "text": "潘宗禎"
+    },
+    {
+     "label": "LOC",
+     "start": 98,
+     "end": 100,
+     "text": "天下"
+    },
+    {
+     "label": "PER",
+     "start": 103,
+     "end": 105,
+     "text": "阮武"
+    },
+    {
+     "label": "PER",
+     "start": 127,
+     "end": 130,
+     "text": "潘宗禎"
+    },
+    {
+     "label": "TITLE",
+     "start": 133,
+     "end": 136,
+     "text": "賢假子"
+    },
+    {
+     "label": "TITLE",
+     "start": 136,
+     "end": 137,
+     "text": "賢"
+    },
+    {
+     "label": "TITLE",
+     "start": 142,
+     "end": 143,
+     "text": "賢"
+    },
+    {
+     "label": "PER",
+     "start": 155,
+     "end": 157,
+     "text": "阮梅"
+    }
+   ],
+   "missing": [
+    "黃仁"
+   ],
+   "id": 8
+  },
+  {
+   "row": 35,
+   "text": "己丑十年明成化五年。春閏二月禁天下家臧兵噐。帝諭文武百官等朕嗣守洪業于今有年海宇謐寕兵革不試詔天下不得家藏兵噐申諭禁之。勑旨捕海賊陞賞。勑旨官員有罪老還民從刑部尚書陳封之奏也。會試天下󰁮人取二十名。二十六日上御敬天門親策問治國取士。命太保平章軍國重事兼提調國子監黎念原吏部尚書阮如堵提調大理寺卿權刑部右侍郎楊執中監試翰林院承旨阮直翰林院大𭓇士署院事兼光。",
+   "raw": "己丑十年明成化五年春閏二月禁天下家臧兵噐帝諭文武百官等朕嗣守洪業于今有年海宇謐寕兵革不試詔天下不得家藏兵噐申諭禁之勑旨捕海賊陞賞勑旨官員有罪老還民從刑部尚書陳封之奏也會試天下󰁮人取二十名二十六日上御敬天門親策問治國取士命太保平章軍國重事兼提調國子監黎念原吏部尚書阮如堵提調大理寺卿權刑部右侍郎楊執中監試翰林院承旨阮直翰林院大𭓇士署院事兼光",
+   "sino": "Kỉ Sửu thập niên Minh Thành Hoá ngũ niên .\n Xuân, nhuận nhị nguyệt, cấm thiên hạ gia tàng binh khí.\n Đế dụ văn võ bách quan đẳng: Trẫm tự thủ hồng nghiệp vu kim hữu niên, hải vũ mật ninh, binh cách bất thí, chiếu thiên hạ bất đắc gia tàng binh khí, thân dụ cấm chi.\n Sắc chỉ bổ hải tặc thăng thưởng.\n Sắc chỉ quan viên hữu tội, lão hoàn dân, tòng Hình bộ thượng thư Trần Phong chi tấu dã.\n Hội thí thiên hạ cử nhân, thủ nhị thập danh.\n Nhị thập lục nhật, thượng ngự Kính Thiên môn, thân sách vấn trị quốc thủ sĩ.\n Mệnh Thái bảo bình chương quân quốc trọng sự kiêm Đề điệu Quốc tử giám Lê Niệm; nguyên Lại bộ thượng thư Nguyễn Như Đổ đề điệu; Đại lí tự khanh quyền hình bộ hữu thị lang Dương Chấp Trung giám thí; Hàn lâm viện thừa chỉ Nguyễn Trực, Hàn lâm viện đại học sĩ thự viện sự kiêm Quang .",
+   "entities": [
+    {
+     "label": "DTM",
+     "start": 0,
+     "end": 2,
+     "text": "己丑"
+    },
+    {
+     "label": "DTM",
+     "start": 2,
+     "end": 4,
+     "text": "十年"
+    },
+    {
+     "label": "LOC",
+     "start": 5,
+     "end": 7,
+     "text": "成化"
+    },
+    {
+     "label": "DTM",
+     "start": 7,
+     "end": 9,
+     "text": "五年"
+    },
+    {
+     "label": "DTM",
+     "start": 10,
+     "end": 11,
+     "text": "春"
+    },
+    {
+     "label": "DTM",
+     "start": 12,
+     "end": 14,
+     "text": "二月"
+    },
+    {
+     "label": "LOC",
+     "start": 15,
+     "end": 17,
+     "text": "天下"
+    },
+    {
+     "label": "LOC",
+     "start": 47,
+     "end": 49,
+     "text": "天下"
+    },
+    {
+     "label": "ORG",
+     "start": 78,
+     "end": 80,
+     "text": "刑部"
+    },
+    {
+     "label": "PER",
+     "start": 82,
+     "end": 84,
+     "text": "陳封"
+    },
+    {
+     "label": "LOC",
+     "start": 90,
+     "end": 92,
+     "text": "天下"
+    },
+    {
+     "label": "DTM",
+     "start": 95,
+     "end": 98,
+     "text": "二十名"
+    },
+    {
+     "label": "DTM",
+     "start": 99,
+     "end": 103,
+     "text": "二十六日"
+    },
+    {
+     "label": "LOC",
+     "start": 105,
+     "end": 108,
+     "text": "敬天門"
+    },
+    {
+     "label": "TITLE",
+     "start": 117,
+     "end": 119,
+     "text": "太保"
+    },
+    {
+     "label": "TITLE",
+     "start": 119,
+     "end": 125,
+     "text": "平章軍國重事"
+    },
+    {
+     "label": "TITLE",
+     "start": 126,
+     "end": 128,
+     "text": "提調"
+    },
+    {
+     "label": "ORG",
+     "start": 128,
+     "end": 131,
+     "text": "國子監"
+    },
+    {
+     "label": "PER",
+     "start": 131,
+     "end": 133,
+     "text": "黎念"
+    },
+    {
+     "label": "PER",
+     "start": 138,
+     "end": 141,
+     "text": "阮如堵"
+    },
+    {
+     "label": "TITLE",
+     "start": 141,
+     "end": 143,
+     "text": "提調"
+    },
+    {
+     "label": "ORG",
+     "start": 148,
+     "end": 150,
+     "text": "刑部"
+    },
+    {
+     "label": "PER",
+     "start": 153,
+     "end": 156,
+     "text": "楊執中"
+    },
+    {
+     "label": "ORG",
+     "start": 158,
+     "end": 161,
+     "text": "翰林院"
+    },
+    {
+     "label": "PER",
+     "start": 163,
+     "end": 165,
+     "text": "阮直"
+    },
+    {
+     "label": "ORG",
+     "start": 165,
+     "end": 168,
+     "text": "翰林院"
+    }
+   ],
+   "missing": [],
+   "id": 9
+  },
+  {
+   "row": 36,
+   "text": "祿寺卿同知經筵事武永寕翰林院直𭓇士阮德貞郭廷寶讀卷。賜范播等進士出身有差。勑旨公侯伯給制命文武百官二品給誥命三品至五品給勑命龍箋六七品給勑命黑爛八品九品給勘合。三月帝幸平灘徃征盆蛮。占城人乘船航海寇擾化州。禁獄官科歛軍錢。先是獄官常歛軍錢買猪酒托為祭祀獄主因飲食𧇊損軍錢。至是禁之。夏四月勑止神武游弩神臂羽林天威等衙司每上期番宿直者並更𤤻專習本藝若。",
+   "raw": "祿寺卿同知經筵事武永寕翰林院直𭓇士阮德貞郭廷寶讀卷賜范播等進士出身有差勑旨公侯伯給制命文武百官二品給誥命三品至五品給勑命龍箋六七品給勑命黑爛八品九品給勘合三月帝幸平灘徃征盆蛮占城人乘船航海寇擾化州禁獄官科歛軍錢先是獄官常歛軍錢買猪酒托為祭祀獄主因飲食𧇊損軍錢至是禁之夏四月勑止神武游弩神臂羽林天威等衙司每上期番宿直者並更𤤻專習本藝若",
+   "sino": "lộc tự khanh đồng tri kinh diên sự Vũ Vĩnh Ninh; Hàn lâm viện trực học sĩ Nguyễn Đức Trinh, Quách Đình Bảo độc quyển.\n Tứ Phạm Bá đẳng tiến sĩ xuất thân hữu sai.\n Sắc chỉ công hầu bá cấp chế mệnh; văn vũ bách quan nhị phẩm cấp cáo mệnh; tam phẩm chí ngũ phẩm cấp sắc mệnh; long tiên lục, thất phẩm cấp sắc mệnh; hắc lạn bát phẩm, cửu phẩm cấp khám hợp.\n Tam nguyệt, đế hạnh Bình Than vãng chinh Bồn Man.\n Chiêm Thành nhân thừa thuyền hàng hải khấu nhiễu Hoá châu.\n Cấm ngục quan khoa liễm quân tiền.\n Tiên thị ngục quan thường liễm quân tiền mãi trư tửu, thác vi tế tự ngục chủ, nhân ẩm thực khuy tổn quân tiền.\n Chí thị cấm chi.\n Hạ tứ nguyệt, sắc chỉ Thần vũ, Du nỗ, Thần tí, Vũ lâm, Thiên uy đẳng nha ti mỗi thượng kì phiên túc trực giả tịnh cánh ban chuyên tập bản nghệ, nhược .",
+   "entities": [
+    {
+     "label": "TITLE",
+     "start": 3,
+     "end": 8,
+     "text": "同知經筵事"
+    },
+    {
+     "label": "PER",
+     "start": 8,
+     "end": 11,
+     "text": "武永寕"
+    },
+    {
+     "label": "ORG",
+     "start": 11,
+     "end": 14,
+     "text": "翰林院"
+    },
+    {
+     "label": "PER",
+     "start": 17,
+     "end": 20,
+     "text": "阮德貞"
+    },
+    {
+     "label": "PER",
+     "start": 20,
+     "end": 23,
+     "text": "郭廷寶"
+    },
+    {
+     "label": "TITLE",
+     "start": 23,
+     "end": 25,
+     "text": "讀卷"
+    },
+    {
+     "label": "ORG",
+     "start": 27,
+     "end": 29,
+     "text": "范播"
+    },
+    {
+     "label": "DTM",
+     "start": 80,
+     "end": 82,
+     "text": "三月"
+    },
+    {
+     "label": "LOC",
+     "start": 84,
+     "end": 86,
+     "text": "平灘"
+    },
+    {
+     "label": "LOC",
+     "start": 88,
+     "end": 90,
+     "text": "盆蛮"
+    },
+    {
+     "label": "LOC",
+     "start": 100,
+     "end": 102,
+     "text": "化州"
+    },
+    {
+     "label": "DTM",
+     "start": 141,
+     "end": 144,
+     "text": "夏四月"
+    },
+    {
+     "label": "ORG",
+     "start": 146,
+     "end": 148,
+     "text": "神武"
+    },
+    {
+     "label": "ORG",
+     "start": 148,
+     "end": 150,
+     "text": "游弩"
+    },
+    {
+     "label": "ORG",
+     "start": 150,
+     "end": 152,
+     "text": "神臂"
+    },
+    {
+     "label": "ORG",
+     "start": 152,
+     "end": 154,
+     "text": "羽林"
+    },
+    {
+     "label": "ORG",
+     "start": 154,
+     "end": 156,
+     "text": "天威"
+    }
+   ],
+   "missing": [],
+   "id": 10
+  }
+ ]
+}

@@ -93,6 +93,38 @@ docker compose up -d --build
 
 ---
 
+## Web so sánh (chạy local)
+
+Giao diện để thử tách câu + NER và so sánh nhiều model trên cùng một đoạn Hán cổ:
+chọn model ngắt câu (`guwen-punc` / `biaodian` / giữ nguyên), chọn nhiều model NER,
+xem âm Hán Việt dưới mỗi câu, đối chiếu với true label, và chấm P/R/F1 trên 54 đoạn gold.
+
+```bash
+git clone -b feature/segment-api https://github.com/clc-hcmus-edu-vn/ancient-chinese-ner.git
+cd ancient-chinese-ner
+pip install -r requirements.txt
+
+# model NER (GuwenBERT+CRF · TQ) — cần quyền truy cập repo
+mkdir -p checkpoints
+gh release download model-v1.0 -R clc-hcmus-edu-vn/ancient-chinese-ner -p best.pt -D checkpoints/
+# (hoặc tải best.pt từ trang Releases bằng trình duyệt rồi đặt vào checkpoints/best.pt)
+
+./run_web.sh                 # → http://localhost:8000   (đổi cổng: PORT=8010 ./run_web.sh)
+```
+
+- Lần đầu chạy sẽ tải các model từ HuggingFace (GuwenBERT, guwen-punc, guwen-ner… ~1.6GB),
+  mỗi model chỉ tải khi được chọn lần đầu. Cần ~4GB RAM; Mac M-series dùng MPS, có NVIDIA thì dùng CUDA.
+- **Đổi phồn → giản thể trước NER**: GuwenBERT có vocab giản thể nên ~24% chữ DVSKTT phồn thể
+  thành `[UNK]`; bật tuỳ chọn này tăng F1 gold từ 45.6 lên 52.5 mà không cần train lại.
+- Các checkpoint so sánh khác (`checkpoints/compare/*.pt`) không có trong repo; thiếu file nào
+  thì web tự ẩn model đó.
+- Cột "F1 chưa thấy" cần file train DVSKTT (`DVSK_TRAIN=...`), không có thì hiện "—".
+- True label: `web/gold_manual.txt` (mỗi dòng 1 đoạn, thực thể dạng `{chữ|NHÃN}`), sửa xong F5 là cập nhật.
+- Link chia sẻ: `?manual=3&simp=1&hv=ruby&models=gw-crf-tq,guwen-ner` (mở đoạn gold số 3, bật giản thể,
+  âm HV dưới từng chữ), `?tab=eval&run=1` (chấm ngay).
+
+---
+
 ## Run API locally
 
 ```bash

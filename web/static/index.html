@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hán cổ NER</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  .wrap { max-width: 1500px; }
+  .split { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items: start; }
+  .split > .panel { margin-bottom: 0; min-width: 0; }
+  @media (max-width: 1000px) { .split { grid-template-columns: 1fr; } }
+  h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); font-weight: 600; }
+  select { padding: 7px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-size: 14px; }
+  .group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .group > b { font-size: 13px; color: var(--muted); font-weight: 600; }
+  mark.miss { border-bottom-style: dashed; opacity: .75; }
+  mark.uniq { border-bottom-style: dashed; }
+  mark .ok, mark .no { font: 700 11px system-ui; margin-left: 1px; }
+  mark .ok { color: var(--LOC); } mark .no { color: var(--PER); }
+  .diff { font-size: 14px; margin-top: 6px; }
+  .counts { font-size: 14px; margin: 8px 0; } .counts b { font-size: 17px; }
+  .diff .hz { font: 16px "Noto Serif TC", "Songti TC", serif; }
+  .gold-doc { padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px dashed var(--line); }
+  .gold-doc:last-child { border: 0; margin: 0; }
+  .pick { display: block; width: 100%; text-align: left; margin-top: 8px; font: 16px "Noto Serif TC", "Songti TC", serif;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* so sánh theo câu */
+  .cmp { display: grid; grid-template-columns: 36px 1fr; gap: 8px; padding: 10px 0; border-bottom: 1px dashed var(--line); }
+  .cmp:last-child { border: 0; }
+  .row { display: grid; grid-template-columns: 150px 1fr; gap: 10px; align-items: baseline; }
+  .row + .row { margin-top: 2px; }
+  .who { font-size: 12px; color: var(--muted); font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+  .hv { font-size: 15px; line-height: 1.7; color: var(--muted); }
+  .hv .e { font-weight: 600; border-bottom: 2px solid; color: var(--ink); }
+  /* âm HV dưới từng chữ: mỗi chữ là một cột nhỏ (chữ trên, âm dưới) */
+  .rb { display: inline-flex; flex-direction: column; align-items: center; vertical-align: top; margin: 0 2px; }
+  .rb > i { font: 11px/1.3 system-ui; font-style: normal; color: var(--muted); white-space: nowrap; }
+  .ruby .han { line-height: 1.5; }
+  .ruby mark { display: inline-flex; align-items: flex-start; padding-bottom: 2px; }
+  .ruby mark sub { align-self: flex-start; margin-top: 8px; }
+  .note { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.best { font-weight: 700; }
+  .dash { color: var(--muted); }
+  tr.disagree td { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+  .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 1s linear infinite; vertical-align: -1px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Hán cổ · Tách câu + NER</h1>
+    <span class="status" id="status">Đang kết nối…</span>
+    <a class="status" href="/gold" target="gold">True label Excel (10 đoạn) ↗</a>
+  </header>
+
+  <div class="panel">
+    <textarea id="input" placeholder="Dán một đoạn Hán cổ — khi dán sẽ thay nội dung cũ và tự phân tích…"></textarea>
+    <div class="controls">
+      <button id="run">Phân tích</button>
+      <div class="group"><b>Ngắt câu</b><select id="seg"></select></div>
+      <div class="group" id="models"><b>NER</b></div>
+      <label title="GuwenBERT có vocab giản thể — ~24% chữ phồn thể DVSKTT thành [UNK]. Đổi từng chữ phồn → giản thể trước khi đưa vào NER (hiển thị vẫn là chữ gốc). guwen-ner luôn đổi.">
+        <input type="checkbox" id="simp"> Đổi phồn → giản thể trước NER</label>
+      <div class="group"><b>Âm Hán Việt</b>
+        <select id="hvmode">
+          <option value="line">Dòng dưới mỗi câu</option>
+          <option value="ruby">Dưới từng chữ</option>
+          <option value="off">Ẩn</option>
+        </select>
+      </div>
+      <span class="status" id="timing"></span>
+    </div>
+  </div>
+
+  <div class="split">
+  <div class="panel" id="out">
+    <div class="tabs">
+      <button data-tab="sents" class="on">So sánh theo câu</button>
+      <button data-tab="table">Bảng thực thể</button>
+      <button data-tab="eval">Chấm trên gold</button>
+      <span style="flex:1"></span>
+      <button class="ghost" id="dl-json">JSON</button>
+      <button class="ghost" id="dl-bio">BIO</button>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div id="view" style="margin-top:12px"></div>
+  </div>
+  <div class="panel" id="gold-panel">
+    <h2>TRUE LABEL</h2>
+    <div id="gold-view"></div>
+  </div>
+  </div>
+</div>
+
+<script>
+const TYPES = { PER: "Nhân danh", LOC: "Địa danh", ORG: "Tổ chức", DTM: "Thời gian", TITLE: "Chức quan",
+                NOUN: "Tên riêng (guwen-ner)", BOOK: "Tên sách (guwen-ner)" };
+const GOLD_TYPES = ["PER", "LOC", "ORG", "DTM", "TITLE"];
+const $ = s => document.querySelector(s);
+let info = null, result = null, tab = "sents", hidden = new Set(), HV = {}, onlyDiff = false;
+const evalRows = new Map();  // "seg|model" → kết quả chấm
+
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const modelName = id => (info?.models.find(m => m.id === id) || { name: id }).name;
+const segName = id => (info?.segmenters.find(m => m.id === id) || { name: id }).name;
+// nhãn không thuộc bộ gold (guwen-ner) → chỉ so được biên
+const typed = ents => ents.every(e => GOLD_TYPES.includes(e.label));
+
+// ── Âm Hán Việt ─────────────────────────────────────────────────────────────
+const PUNC_HV = { "，": ",", "。": ".", "、": ",", "；": ";", "：": ":", "？": "?", "！": "!" };
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const hvOf = ch => PUNC_HV[ch] ?? (HV[ch] ? HV[ch][0] : ch);
+const hvTitle = ch => HV[ch] && HV[ch].length > 1 ? HV[ch].join(" / ") : "";
+const hvText = (text, proper = false) => [...text].map(ch => proper ? cap(hvOf(ch)) : hvOf(ch)).join(" ")
+  .replace(/ ([,.;:?!])/g, "$1");
+
+// dòng âm HV: thực thể (theo model đầu tiên) viết hoa + gạch chân màu nhãn
+function hvLine(text, ents) {
+  let out = [], pos = 0;
+  const chunk = s => s && out.push(esc(hvText(s)));
+  for (const e of ents) {
+    if (hidden.has(e.label)) continue;
+    chunk(text.slice(pos, e.start));
+    out.push(`<span class="e" style="border-color:var(--${e.label})" title="${esc(e.text)} · ${e.label}">${esc(hvText(e.text, true))}</span>`);
+    pos = e.end;
+  }
+  chunk(text.slice(pos));
+  return out.join(" ").replace(/ ([,.;:?!])/g, "$1");
+}
+
+// ── Tô màu thực thể ─────────────────────────────────────────────────────────
+const charHtml = (s, ruby, proper = false) => ruby
+  ? [...s].map(ch => PUNC_HV[ch] ? `<span class="rb">${esc(ch)}<i>&nbsp;</i></span>`
+      : `<span class="rb" title="${esc(hvTitle(ch))}">${esc(ch)}<i>${esc(proper ? cap(hvOf(ch)) : hvOf(ch))}</i></span>`).join("")
+  : esc(s);
+
+function highlight(text, ents, others = null, ruby = false) {
+  let html = "", pos = 0;
+  for (const e of ents) {
+    if (hidden.has(e.label)) continue;
+    // chỉ model này bắt (không model nào khác có cùng biên) → gạch đứt
+    const uniq = others && !others.some(o => o.has(`${e.start}|${e.end}`));
+    html += charHtml(text.slice(pos, e.start), ruby);
+    html += `<mark class="${uniq ? "uniq" : ""}" style="border-color:var(--${e.label})" title="${TYPES[e.label] || e.label} · ${esc(hvText(e.text, true))}${uniq ? " · chỉ model này bắt" : ""}">${charHtml(e.text, ruby, true)}<sub style="color:var(--${e.label})">${e.label}</sub></mark>`;
+    pos = e.end;
+  }
+  return html + charHtml(text.slice(pos), ruby);
+}
+
+function renderLegend() {
+  const counts = {};
+  Object.values(result.results).forEach(R => R.forEach(ents => ents.forEach(e => counts[e.label] = (counts[e.label] || 0) + 1)));
+  const shown = Object.keys(TYPES).filter(t => counts[t] || GOLD_TYPES.includes(t));
+  $("#legend").innerHTML = shown.map(t =>
+    `<label><input type="checkbox" data-type="${t}" ${hidden.has(t) ? "" : "checked"}>
+       <span style="background:var(--${t})">${t}</span> ${TYPES[t]} (${counts[t] || 0})</label>`).join("") +
+    (result.models.length > 1 ? `<span class="status">Gạch đứt = chỉ model đó bắt được</span>` : "");
+  $("#legend").querySelectorAll("input").forEach(cb => cb.onchange = () => {
+    cb.checked ? hidden.delete(cb.dataset.type) : hidden.add(cb.dataset.type); render(); renderGold();
+  });
+}
+
+// ── Các tab ─────────────────────────────────────────────────────────────────
+function render() {
+  const v = $("#view");
+  if (tab === "eval") { renderEval(); return; }
+  $("#legend").hidden = false;
+  if (!result) { v.innerHTML = `<p class="empty">Nhập văn bản rồi bấm Phân tích.</p>`; return; }
+  const S = result.sentences, M = result.models;
+  if (!S.length) { v.innerHTML = `<p class="empty">Không có câu nào.</p>`; return; }
+  const mode = $("#hvmode").value;
+  if (tab === "sents") {
+    v.className = mode === "ruby" ? "ruby" : "";
+    v.innerHTML = S.map((s, i) => {
+      const spans = M.map(m => new Set(result.results[m][i].map(e => `${e.start}|${e.end}`)));
+      const rows = M.map((m, k) => `<div class="row"><div class="who">${esc(modelName(m))}</div>
+        <div class="han">${highlight(s, result.results[m][i], M.length > 1 ? spans.filter((_, j) => j !== k) : null, mode === "ruby")}</div></div>`);
+      if (mode === "line")
+        rows.push(`<div class="row"><div class="who">Âm HV</div><div class="hv">${hvLine(s, result.results[M[0]][i])}</div></div>`);
+      return `<div class="cmp"><div class="num">${i + 1}</div><div>${rows.join("")}</div></div>`;
+    }).join("");
+  } else {
+    // gộp theo chữ thực thể: mỗi model gán nhãn gì, bao nhiêu lần
+    const agg = new Map();
+    M.forEach(m => S.forEach((s, i) => result.results[m][i].forEach(e => {
+      if (hidden.has(e.label)) return;
+      if (!agg.has(e.text)) agg.set(e.text, { text: e.text, n: 0, sents: new Set(), by: {} });
+      const a = agg.get(e.text); a.n++; a.sents.add(i + 1);
+      (a.by[m] ??= {})[e.label] = (a.by[m][e.label] || 0) + 1;
+    })));
+    // không thống nhất: model này bắt mà model kia không, hoặc các model cùng hệ nhãn gán nhãn khác nhau
+    const disagree = r => {
+      if (new Set(M.map(m => !!r.by[m])).size > 1) return true;
+      const typedLabels = M.map(m => Object.keys(r.by[m]))
+        .filter(ls => ls.every(l => GOLD_TYPES.includes(l))).map(ls => ls.sort().join(","));
+      return new Set(typedLabels).size > 1;
+    };
+    let rows = [...agg.values()].map(r => ({ ...r, disagree: disagree(r) }));
+    if (onlyDiff) rows = rows.filter(r => r.disagree);
+    rows.sort((a, b) => b.disagree - a.disagree || b.n - a.n);
+    const cell = by => by ? Object.entries(by).map(([l, n]) =>
+      `<span class="tag" style="background:var(--${l})">${l}</span>${n > 1 ? `×${n}` : ""}`).join(" ") : `<span class="dash">—</span>`;
+    v.className = "";
+    v.innerHTML = `<label style="margin-bottom:8px"><input type="checkbox" id="only-diff" ${onlyDiff ? "checked" : ""}> Chỉ hiện thực thể các model không thống nhất</label>` +
+      (rows.length ? `<div class="scroll"><table><thead><tr><th>Thực thể</th><th>Âm Hán Việt</th>${M.map(m => `<th>${esc(modelName(m))}</th>`).join("")}<th>Câu</th></tr></thead><tbody>
+      ${rows.map(r => `<tr class="${r.disagree ? "disagree" : ""}"><td class="hz">${esc(r.text)}</td><td>${esc(hvText(r.text, true))}</td>
+        ${M.map(m => `<td>${cell(r.by[m])}</td>`).join("")}<td>${[...r.sents].join(", ")}</td></tr>`).join("")}</tbody></table></div>`
+      : `<p class="empty">Không có thực thể.</p>`);
+    $("#only-diff").onchange = e => { onlyDiff = e.target.checked; render(); };
+  }
+}
+
+// ── Chấm trên toàn bộ gold ──────────────────────────────────────────────────
+const pct = x => (x * 100).toFixed(1);
+function renderEval() {
+  const v = $("#view");
+  v.className = ""; $("#legend").hidden = true;
+  const rows = [...evalRows.values()];
+  const bestF = k => Math.max(...rows.map(r => r[k].f1));
+  const types = rows[0] ? Object.keys(rows[0].per_type) : [];
+  v.innerHTML = `
+    <p class="note" style="margin-top:0">Chạy cả pipeline (ngắt câu → NER) trên toàn bộ true label gõ tay (<code>web/gold_manual.txt</code>),
+      với model ngắt câu và các model NER đang chọn ở trên. Mỗi lần chấm thêm vào bảng để so sánh.</p>
+    <div class="controls" style="margin:10px 0 14px"><button id="eval-run" title="${selectedModels().map(m => esc(modelName(m))).join(", ")}">Chấm ${selectedModels().length} model · ngắt câu ${esc(segName($("#seg").value))}${$("#simp").checked ? " · giản thể" : ""}</button>
+      ${rows.length ? `<button class="ghost" id="eval-clear">Xoá bảng</button>` : ""}<span class="status" id="eval-status"></span></div>
+    ${rows.length ? `<div class="scroll"><table>
+      <thead><tr><th>Ngắt câu</th><th>Model NER</th><th title="Đổi phồn → giản thể trước NER">Giản thể</th>
+        <th class="num">P</th><th class="num">R</th><th class="num">F1</th>
+        <th class="num" title="F1 (biên + nhãn) chỉ trên thực thể nằm ở vùng chữ không có trong train DVSKTT">F1<sub>chưa thấy</sub></th>
+        <th class="num">P<sub>biên</sub></th><th class="num">R<sub>biên</sub></th><th class="num">F1<sub>biên</sub></th>
+        ${types.map(t => `<th class="num" title="Tỉ lệ thực thể ${t} trong gold được bắt đúng biên">R<sub>biên</sub> ${t}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map(r => `<tr><td>${esc(segName(r.seg))}</td><td>${esc(modelName(r.model))}</td><td>${r.simp ? "✓" : ""}</td>
+        ${r.untyped ? `<td class="num dash" colspan="3">khác hệ nhãn</td>` :
+          ["p", "r", "f1"].map(k => `<td class="num ${k === "f1" && r.strict.f1 === bestF("strict") ? "best" : ""}">${pct(r.strict[k])}</td>`).join("")}
+        ${r.untyped || !r.hasTrain ? `<td class="num dash">—</td>` : `<td class="num ${r.unseen.f1 === bestF("unseen") ? "best" : ""}">${pct(r.unseen.f1)}</td>`}
+        ${["p", "r", "f1"].map(k => `<td class="num ${k === "f1" && r.span.f1 === bestF("span") ? "best" : ""}">${pct(r.span[k])}</td>`).join("")}
+        ${types.map(t => `<td class="num">${pct(r.per_type[t].span_recall)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+      <p class="note">P/R/F1: khớp cả biên lẫn nhãn. <sub>biên</sub>: chỉ cần khớp biên, bỏ qua nhãn — dùng để so với guwen-ner (chỉ có NOUN/BOOK, không có PER/LOC/…).
+        F1<sub>chưa thấy</sub>: chỉ tính thực thể nằm ở vùng chữ KHÔNG có trong tập train DVSKTT — gold gõ tay trùng phần lớn với train DVSKTT,
+        nên model train trên DVSKTT phải xem cột này mới công bằng.
+        ${rows[0] ? `Gold: ${rows[0].docs} đoạn, ${rows[0].gold} thực thể (${rows[0].goldUnseen} ở vùng chưa thấy).` : ""}</p>` : ""}`;
+  $("#eval-run").onclick = runEval;
+  if ($("#eval-clear")) $("#eval-clear").onclick = () => { evalRows.clear(); renderEval(); };
+}
+
+async function runEval() {
+  const seg = $("#seg").value, models = selectedModels(), simplify = $("#simp").checked;
+  if (!models.length) return;
+  $("#eval-run").disabled = true;
+  $("#eval-status").innerHTML = `<span class="spin"></span> Đang chấm (lần đầu có thể mất vài phút để tải model)…`;
+  try {
+    const r = await fetch("/api/evaluate", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ segmenter: seg, models, simplify }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.statusText);
+    for (const [m, x] of Object.entries(d.models)) {
+      const simp = simplify || m === "guwen-ner";
+      evalRows.set(`${seg}|${m}|${simp}`, { seg, model: m, simp, ...x, untyped: m === "guwen-ner",
+        docs: d.docs, gold: d.gold_entities, goldUnseen: d.gold_unseen, hasTrain: d.has_train });
+    }
+    renderEval();
+  } catch (e) {
+    $("#eval-status").innerHTML = `<span class="err">Lỗi: ${esc(e.message)}</span>`;
+    $("#eval-run").disabled = false;
+  }
+}
+
+// ── Gọi server ──────────────────────────────────────────────────────────────
+function download(name, content, type) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([content], { type }));
+  a.download = name; a.click(); URL.revokeObjectURL(a.href);
+}
+
+// BIO nhiều cột: chữ \t nhãn model 1 \t nhãn model 2 …
+function toBIO() {
+  const M = result.models;
+  return `# chữ\t${M.join("\t")}\n` + result.sentences.map((s, i) => {
+    const cols = M.map(m => {
+      const tags = Array(s.length).fill("O");
+      result.results[m][i].forEach(e => { for (let k = e.start; k < e.end; k++) tags[k] = (k === e.start ? "B-" : "I-") + e.label; });
+      return tags;
+    });
+    return [...s].map((c, k) => [c, ...cols.map(t => t[k])].join("\t")).join("\n");
+  }).join("\n\n") + "\n";
+}
+
+const selectedModels = () => [...document.querySelectorAll("#models input:checked")].map(i => i.value);
+
+async function analyze() {
+  const text = $("#input").value.trim(), models = selectedModels();
+  if (!text) return;
+  if (!models.length) { $("#timing").innerHTML = `<span class="err">Chọn ít nhất một model NER</span>`; return; }
+  $("#run").disabled = true; $("#timing").innerHTML = `<span class="spin"></span> Đang xử lý…`;
+  const t0 = performance.now();
+  try {
+    const r = await fetch("/api/analyze", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, segmenter: $("#seg").value, models, simplify: $("#simp").checked }) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || r.statusText);
+    result = { ...data, models }; showPicker = false;
+    const n = models.map(m => `${modelName(m)}: ${data.results[m].reduce((a, s) => a + s.length, 0)}`).join(" · ");
+    $("#timing").textContent = `${data.sentences.length} câu · ${n} thực thể · ${((performance.now() - t0) / 1000).toFixed(1)}s`;
+    if (tab === "eval") { tab = "sents"; syncTabs(); }
+    renderLegend(); render(); renderGold();
+  } catch (e) {
+    $("#timing").innerHTML = `<span class="err">Lỗi: ${esc(e.message)}</span>`;
+  } finally { $("#run").disabled = false; }
+}
+
+const syncTabs = () => document.querySelectorAll(".tabs [data-tab]").forEach(x => x.classList.toggle("on", x.dataset.tab === tab));
+$("#run").onclick = analyze;
+$("#input").addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) analyze(); });
+document.querySelectorAll(".tabs [data-tab]").forEach(b => b.onclick = () => { tab = b.dataset.tab; syncTabs(); render(); });
+$("#hvmode").onchange = render;
+$("#dl-json").onclick = () => result && download("ner_result.json", JSON.stringify(result, null, 2), "application/json");
+$("#dl-bio").onclick = () => result && download("ner_result.bio.txt", toBIO(), "text/plain");
+
+// ── So sánh với true label (web/gold_manual.txt) ─────────────────────────────
+const PUNCT = /[\s，。、；：？！“”‘’「」『』（）《》〈〉【】…—·,.;:?!"'()\[\]]/;
+let goldDocs = [], showPicker = false;
+const loadGold = () => fetch("/api/gold").then(r => r.json()).then(g => goldDocs = g.docs);
+
+// thực thể model → toạ độ trên chuỗi thô (đã bỏ dấu câu model chèn)
+function modelRawEntities(m) {
+  const ents = []; let raw = 0;
+  result.sentences.forEach((s, i) => {
+    const map = [...s].map(ch => PUNCT.test(ch) ? -1 : raw++);
+    for (const e of result.results[m][i]) {
+      const idx = map.slice(e.start, e.end).filter(k => k >= 0);
+      if (idx.length) ents.push({ label: e.label, text: e.text, start: idx[0], end: idx[idx.length - 1] + 1 });
+    }
+  });
+  return ents;
+}
+
+function goldMatches(inputRaw) {
+  const out = [];
+  for (const d of goldDocs) {
+    let p = inputRaw.indexOf(d.text);
+    if (p >= 0) { out.push({ d, text: d.text, inOff: p, gOff: 0 }); continue; }
+    const q = d.text.indexOf(inputRaw);
+    if (q >= 0 && inputRaw.length >= 4) out.push({ d, text: inputRaw, inOff: 0, gOff: q });
+  }
+  return out;
+}
+
+function renderGold() {
+  const v = $("#gold-view");
+  const inputRaw = [...$("#input").value].filter(ch => !PUNCT.test(ch)).join("");
+  const matches = result && !showPicker ? goldMatches(inputRaw) : [];
+  if (!matches.length) {
+    const hasMatch = result && goldMatches(inputRaw).length;
+    v.innerHTML = (hasMatch ? `<button class="ghost" id="gold-back">← Quay lại kết quả so sánh</button>` : "") +
+      `<p class="empty">${result && !hasMatch ? "Đoạn vừa phân tích không có true label." : ""} Chọn một đoạn có true label:</p>` +
+      goldDocs.map(d => `<button class="ghost pick" data-id="${d.id}">${d.id}. ${esc(d.text)}</button>`).join("");
+    v.querySelectorAll(".pick").forEach(b => b.onclick = () => {
+      showPicker = false;
+      $("#input").value = goldDocs.find(d => d.id == b.dataset.id).text; analyze();
+    });
+    if (hasMatch) $("#gold-back").onclick = () => { showPicker = false; renderGold(); };
+    return;
+  }
+  const M = result.models, base = M[0];
+  const preds = Object.fromEntries(M.map(m => [m, modelRawEntities(m)]));
+  const strictKey = e => `${e.start}|${e.end}|${e.label}`, spanKey = e => `${e.start}|${e.end}`;
+  const chip = e => `<span class="hz">${esc(e.text)}</span> <span class="tag" style="background:var(--${e.label})">${e.label}</span>`;
+  v.innerHTML = matches.map(m => {
+    const len = m.text.length;
+    // gold trong vùng hiển thị, quy về toạ độ vùng
+    const gold = m.d.entities.filter(e => e.start >= m.gOff && e.end <= m.gOff + len)
+      .map(e => ({ ...e, start: e.start - m.gOff, end: e.end - m.gOff }));
+    const per = M.map(mid => {
+      const pr = preds[mid].filter(e => e.start >= m.inOff && e.end <= m.inOff + len)
+        .map(e => ({ ...e, start: e.start - m.inOff, end: e.end - m.inOff }));
+      const key = typed(pr) ? strictKey : spanKey;
+      const pk = new Set(pr.map(key)), gk = new Set(gold.map(key));
+      return { mid, pr, pk, key, missed: gold.filter(e => !pk.has(key(e))), extra: pr.filter(e => !gk.has(key(e))) };
+    });
+    // văn bản gold: ✓/✗ theo model đầu tiên
+    const b = per[0];
+    let html = "", pos = 0;
+    for (const e of gold) {
+      if (hidden.has(e.label)) continue;
+      const ok = b.pk.has(b.key(e));
+      html += esc(m.text.slice(pos, e.start)) +
+        `<mark class="${ok ? "" : "miss"}" style="border-color:var(--${e.label})" title="${esc(hvText(e.text, true))}">${esc(e.text)}<sub style="color:var(--${e.label})">${e.label}</sub><span class="${ok ? "ok" : "no"}">${ok ? "✓" : "✗"}</span></mark>`;
+      pos = e.end;
+    }
+    html += esc(m.text.slice(pos));
+    return `<div class="gold-doc">
+      <div class="han">${html}</div>
+      <p class="note">✓/✗ theo <b>${esc(modelName(base))}</b>${b.key === spanKey ? " (chỉ so biên)" : ""}</p>
+      ${per.map(p => `<div class="counts"><b>${esc(modelName(p.mid))}</b>: bắt đúng <b>${gold.length - p.missed.length}/${gold.length}</b>${p.key === spanKey ? " (chỉ so biên)" : ""}
+          · sinh ra ${p.pr.length} · thừa/sai <b>${p.extra.length}</b>
+        <details><summary class="status">Chi tiết</summary>
+          ${p.missed.length ? `<div class="diff">✗ Bỏ sót / sai biên: ${p.missed.map(chip).join("　")}</div>` : ""}
+          ${p.extra.length ? `<div class="diff">＋ Gán thừa / sai: ${p.extra.map(chip).join("　")}</div>` : ""}
+        </details></div>`).join("")}
+    </div>`;
+  }).join("");
+  v.insertAdjacentHTML("afterbegin", `<button class="ghost" id="gold-pick">← Chọn đoạn true label khác</button>`);
+  $("#gold-pick").onclick = () => { showPicker = true; renderGold(); };
+}
+
+// dán = thay toàn bộ nội dung cũ rồi chạy luôn (tiện dán từng câu để so sánh)
+$("#input").addEventListener("paste", e => {
+  const t = e.clipboardData.getData("text");
+  if (!t.trim()) return;
+  e.preventDefault(); $("#input").value = t.trim();
+  loadGold().then(analyze);
+});
+
+// ── Khởi động ───────────────────────────────────────────────────────────────
+const DEFAULT_MODELS = ["gw-crf-tq", "guwen-ner"];
+Promise.all([
+  fetch("/api/info").then(r => r.json()),
+  fetch("/static/hanviet.json").then(r => r.json()).catch(() => ({})),
+  loadGold(),
+]).then(([i, hv]) => {
+  info = i; HV = hv;
+  $("#seg").innerHTML = i.segmenters.map(s => `<option value="${s.id}" title="${esc(s.desc)}">${esc(s.name)}</option>`).join("");
+  $("#models").insertAdjacentHTML("beforeend", i.models.map(m =>
+    `<label title="${esc(m.desc)}"><input type="checkbox" value="${m.id}" ${DEFAULT_MODELS.includes(m.id) ? "checked" : ""}> ${esc(m.name)}</label>`).join(""));
+  $("#status").textContent = `Thiết bị: ${i.device} · model nạp khi dùng lần đầu`;
+  render(); renderGold();
+  // link chia sẻ: ?manual=<id đoạn true label>&seg=…&models=mine,guwen-ner&hv=ruby
+  const q = new URLSearchParams(location.search);
+  if (q.get("seg")) $("#seg").value = q.get("seg");
+  if (q.get("hv")) $("#hvmode").value = q.get("hv");
+  if (q.get("simp")) $("#simp").checked = q.get("simp") === "1";
+  if (q.get("models")) document.querySelectorAll("#models input").forEach(c => c.checked = q.get("models").split(",").includes(c.value));
+  if (q.get("tab")) { tab = q.get("tab"); syncTabs(); render(); }
+  if (tab === "eval" && q.get("run")) runEval();  // ?tab=eval&run=1: chấm ngay
+  const manual = goldDocs.find(d => String(d.id) === q.get("manual"));
+  if (manual) { $("#input").value = manual.text; analyze(); }
+  const goldId = q.get("gold");
+  if (goldId) fetch("/static/gold.json").then(r => r.json()).then(g => {
+    const d = g.docs.find(x => String(x.id) === goldId);
+    if (d) { $("#input").value = d.raw; analyze(); }
+  });
+}).catch(() => $("#status").textContent = "Không kết nối được server");
+</script>
+</body>
+</html>

@@ -31,3 +31,6 @@ wandb/
 
 # Logs
 *.log
+
+# Cache Unihan của web/make_hanviet.py
+web/.unihan_vietnamese.txt
