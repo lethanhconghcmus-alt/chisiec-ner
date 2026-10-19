@@ -1,51 +1,149 @@
 """
-Predictor — loads model once at startup and exposes predict() / predict_document().
+Predictor — NER models (BERT encoder + CRF) selectable by name.
+
+Each model is loaded once, on first use, and exposes predict() / predict_document().
+Select the default with NER_MODEL; a request can also ask for any model in
+available_models() (= registered models whose checkpoint file exists).
 """
 from __future__ import annotations
 
 import json
 import logging
 import os
+import threading
 from typing import Dict, List
 
 import torch
 from transformers import AutoTokenizer
 
-from src.models import GuwenBertCRF
+from src.models import GuwenBertCRF as BertCRF  # generic encoder + Linear + CRF
 
 logger = logging.getLogger("api.predictor")
 
-BACKBONE   = os.getenv("BACKBONE",   "ethanyt/guwenbert-base")
-CKPT_PATH  = os.getenv("CHECKPOINT_PATH",  "outputs/ancient/guwenbert_crf/best.pt")
-LABEL_MAP  = os.getenv("LABEL_MAP_PATH", os.getenv("LABEL_MAP", "outputs/ancient/guwenbert_crf/label_map.json"))
-MAX_LEN    = int(os.getenv("MAX_LEN", "128"))
-DEVICE     = torch.device(os.getenv("DEVICE",  "cpu"))
+CHECKPOINT_DIR = os.getenv("CHECKPOINT_DIR", "checkpoints")
+LABEL_MAP      = os.getenv("LABEL_MAP_PATH", os.getenv("LABEL_MAP", "artifacts/label_map.json"))
+DEVICE         = torch.device(os.getenv("DEVICE", "cpu"))
+
+# All models share the 11-label BIO map in artifacts/label_map.json (PER/LOC/ORG/DTM/TITLE).
+# F1 = entity-level exact match on each model's own test set.
+NER_MODELS: Dict[str, Dict] = {
+    "guwenbert-crf-tq": {
+        "backbone": "ethanyt/guwenbert-base",
+        "checkpoint": os.getenv("CHECKPOINT_PATH", os.path.join(CHECKPOINT_DIR, "best.pt")),
+        "max_len": 128,
+        "constrained": False,
+        "punct_to": None,
+        "description": "GuwenBERT + CRF, trained on 4 Chinese histories (AnChineseNERE, CHisIEC, "
+                       "BEEVETA, C-CLUE). Test F1 0.932 on that data; not trained on DVSKTT.",
+    },
+    "sikubert-crf-dvsktt": {
+        "backbone": "SIKU-BERT/sikubert",
+        "checkpoint": os.path.join(CHECKPOINT_DIR, "sikubert_crf_dvsktt.pt"),
+        "max_len": 256,
+        "constrained": True,
+        "punct_to": ".",
+        "description": "SikuBERT + CRF, fine-tuned on DVSKTT dataset_v2_clean "
+                       "(benchmark v2 R2, seed 44). DVSKTT test F1 0.678.",
+    },
+    "gujiroberta-crf-dvsktt": {
+        "backbone": "hsc748NLP/GujiRoBERTa_jian",
+        "checkpoint": os.path.join(CHECKPOINT_DIR, "gujiroberta_crf_dvsktt.pt"),
+        "max_len": 256,
+        "constrained": True,
+        "punct_to": ".",
+        "description": "GujiRoBERTa (jian) + CRF, fine-tuned on DVSKTT dataset_v1. "
+                       "DVSKTT test F1 0.663.",
+    },
+}
+DEFAULT_MODEL = os.getenv("NER_MODEL", "guwenbert-crf-tq")
+
+# Punctuation never belongs to an entity. DVSKTT training text separates sentences with
+# ASCII "." and has almost no CJK marks, so DVSKTT models get CJK marks rewritten to "."
+# ("punct_to") -- one char for one char, so offsets are unchanged.
+CJK_PUNCT = set("，。：；？！、")
+PUNCT = CJK_PUNCT | set(".,:;?!“”‘’「」『』（）《》〈〉【】…—·\"'()[]")
+
+
+def available_models() -> List[str]:
+    return [name for name, cfg in NER_MODELS.items() if os.path.exists(cfg["checkpoint"])]
+
+
+def _constrain_bio(crf, id2label: Dict[int, str]) -> None:
+    """Forbid illegal BIO transitions in the CRF (I-X only after B-X / I-X, never at start)."""
+    big_neg = -1e4
+    with torch.no_grad():
+        for j, to in id2label.items():
+            if not to.startswith("I-"):
+                continue
+            crf.start_transitions[j] = big_neg
+            for i, frm in id2label.items():
+                if frm[2:] != to[2:] or frm == "O":
+                    crf.transitions[i, j] = big_neg
 
 
 class Predictor:
-    def __init__(self) -> None:
-        logger.info("Loading tokenizer from %s", BACKBONE)
-        self.tokenizer = AutoTokenizer.from_pretrained(BACKBONE)
+    def __init__(self, name: str = DEFAULT_MODEL) -> None:
+        if name not in NER_MODELS:
+            raise ValueError(f"Unknown NER model '{name}'. Known: {list(NER_MODELS)}")
+        cfg = NER_MODELS[name]
+        self.name = name
+        self.max_len: int = cfg["max_len"]
+        self.punct_to: str | None = cfg["punct_to"]
 
-        logger.info("Loading label map from %s", LABEL_MAP)
+        logger.info("[%s] Loading tokenizer from %s", name, cfg["backbone"])
+        self.tokenizer = AutoTokenizer.from_pretrained(cfg["backbone"])
+
         with open(LABEL_MAP, encoding="utf-8") as f:
             maps = json.load(f)
-        self.label2id: Dict[str, int] = maps["label2id"]
         self.id2label: Dict[int, str] = {int(k): v for k, v in maps["id2label"].items()}
-        num_labels = len(self.label2id)
 
-        logger.info("Loading model checkpoint from %s", CKPT_PATH)
-        self.model = GuwenBertCRF(BACKBONE, num_labels)
-        state = torch.load(CKPT_PATH, map_location=DEVICE)
-        self.model.load_state_dict(state)
+        logger.info("[%s] Loading checkpoint from %s", name, cfg["checkpoint"])
+        self.model = BertCRF(cfg["backbone"], len(self.id2label))
+        self.model.load_state_dict(torch.load(cfg["checkpoint"], map_location="cpu"))
+        if cfg["constrained"]:
+            _constrain_bio(self.model.crf, self.id2label)
         self.model.to(DEVICE)
         self.model.eval()
-        logger.info("Model ready on %s | labels=%d", DEVICE, num_labels)
+        logger.info("[%s] Model ready on %s", name, DEVICE)
 
     @torch.no_grad()
+    def tag(self, texts: List[str]) -> List[List[str]]:
+        """BIO label per character for a batch of texts (each truncated to max_len tokens)."""
+        model_texts = [[self.punct_to if self.punct_to and c in CJK_PUNCT else c for c in t]
+                       for t in texts]
+        encoding = self.tokenizer(
+            model_texts,
+            is_split_into_words=True,
+            max_length=self.max_len,
+            truncation=True,
+            padding=True,
+            return_tensors="pt",
+        )
+        token_type_ids = encoding.get("token_type_ids")
+        pred_ids = self.model(
+            encoding["input_ids"].to(DEVICE),
+            encoding["attention_mask"].to(DEVICE),
+            token_type_ids.to(DEVICE) if token_type_ids is not None else None,
+        )
+
+        # Label each character by its first sub-token. Characters the tokenizer
+        # drops entirely (e.g. Private Use Area code points, frequent in DVSKTT)
+        # get no token and stay "O" -- indexing by word id keeps later labels aligned.
+        result = []
+        for b, text in enumerate(texts):
+            labels = ["O"] * len(text)
+            seen = set()
+            for tok_idx, wid in enumerate(encoding.word_ids(batch_index=b)):
+                if wid is not None and wid not in seen and tok_idx < len(pred_ids[b]):
+                    seen.add(wid)
+                    if text[wid] not in PUNCT:
+                        labels[wid] = self.id2label[pred_ids[b][tok_idx]]
+            result.append(labels)
+        return result
+
     def predict(self, sentence: str) -> List[Dict]:
         """
-        Predict NER entities for a single sentence string.
+        Predict NER entities for a single sentence (truncated to max_len tokens).
 
         Returns a list of entity dicts:
           {"text": str, "label": str, "start": int, "end": int}
@@ -53,85 +151,34 @@ class Predictor:
         tokens = list(sentence.strip())
         if not tokens:
             return []
-
-        encoding = self.tokenizer(
-            tokens,
-            is_split_into_words=True,
-            max_length=MAX_LEN,
-            padding="max_length",
-            truncation=True,
-            return_tensors="pt",
-        )
-
-        input_ids      = encoding["input_ids"].to(DEVICE)
-        attention_mask = encoding["attention_mask"].to(DEVICE)
-        token_type_ids = encoding.get("token_type_ids", None)
-        if token_type_ids is not None:
-            token_type_ids = token_type_ids.to(DEVICE)
-
-        pred_ids = self.model(input_ids, attention_mask, token_type_ids)
-        pred_ids = pred_ids[0]  # batch size = 1
-
-        word_ids = encoding.word_ids(batch_index=0)
-        token_labels: List[str] = []
-        for wid, pid in zip(word_ids, pred_ids):
-            if wid is None:
-                continue
-            if len(token_labels) <= wid:
-                token_labels.append(self.id2label[pid])
+        labels = self.tag(["".join(tokens)])[0]
 
         # BIO → entity spans
-        entities = []
-        cur_tokens: List[str] = []
+        entities: List[Dict] = []
         cur_label: str | None = None
-        cur_start: int = 0
-
-        for i, (tok, label) in enumerate(zip(tokens[:len(token_labels)], token_labels)):
-            if label.startswith("B-"):
-                if cur_tokens:
-                    entities.append({
-                        "text":  "".join(cur_tokens),
-                        "label": cur_label,
-                        "start": cur_start,
-                        "end":   cur_start + len(cur_tokens),
-                    })
-                cur_tokens = [tok]
-                cur_label  = label[2:]
-                cur_start  = i
-            elif label.startswith("I-") and cur_label == label[2:]:
-                cur_tokens.append(tok)
-            else:
-                if cur_tokens:
-                    entities.append({
-                        "text":  "".join(cur_tokens),
-                        "label": cur_label,
-                        "start": cur_start,
-                        "end":   cur_start + len(cur_tokens),
-                    })
-                cur_tokens = []
-                cur_label  = None
-
-        if cur_tokens:
-            entities.append({
-                "text":  "".join(cur_tokens),
-                "label": cur_label,
-                "start": cur_start,
-                "end":   cur_start + len(cur_tokens),
-            })
-
+        cur_start = 0
+        for i, label in enumerate(labels + ["O"]):
+            if label.startswith("I-") and cur_label == label[2:]:
+                continue
+            if cur_label is not None:
+                entities.append({"text": "".join(tokens[cur_start:i]), "label": cur_label,
+                                 "start": cur_start, "end": i})
+                cur_label = None
+            if label != "O":  # B-X, or I-X without a matching open entity
+                cur_label, cur_start = label[2:], i
         return entities
 
     def predict_document(self, sentences: List[str]) -> List[List[Dict]]:
         """
         Predict NER entities for a list of consecutive sentences.
 
-        Sentences are joined and re-cut into windows of <= MAX_LEN - 2 chars
+        Sentences are joined and re-cut into windows of <= max_len - 2 chars
         (preferring sentence-final marks, then commas) so that short sentences
         keep their context and long ones are not truncated. Entities are then
         mapped back to per-sentence offsets.
         """
         full = "".join(sentences)
-        max_chars = MAX_LEN - 2
+        max_chars = self.max_len - 2
 
         doc_entities: List[Dict] = []
         start = 0
@@ -159,3 +206,22 @@ class Predictor:
             results.append(ents)
             offset = sent_end
         return results
+
+
+_predictors: Dict[str, Predictor] = {}
+_lock = threading.Lock()
+
+
+def get_predictor(name: str | None = None) -> Predictor:
+    """Return the predictor for `name` (default model if None), loading it on first use."""
+    name = name or DEFAULT_MODEL
+    if name not in available_models():
+        raise KeyError(name)
+    with _lock:
+        if name not in _predictors:
+            _predictors[name] = Predictor(name)
+        return _predictors[name]
+
+
+def loaded_models() -> List[str]:
+    return list(_predictors)

@@ -30,13 +30,13 @@ app = FastAPI(title="Hán cổ — tách câu + NER")
 class AnalyzeRequest(BaseModel):
     text: str
     segmenter: str = "guwen-punc"
-    models: List[str] = ["gw-crf-tq", "guwen-ner"]
+    models: List[str] = ["guwenbert-crf-tq", "sikubert-crf-dvsktt"]
     simplify: bool = False
 
 
 class EvaluateRequest(BaseModel):
     segmenter: str = "guwen-punc"
-    models: List[str] = ["gw-crf-tq", "guwen-ner"]
+    models: List[str] = ["guwenbert-crf-tq", "sikubert-crf-dvsktt"]
     simplify: bool = False
 
 

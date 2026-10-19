@@ -24,7 +24,7 @@ from web.pipeline import PUNCT_RE, Pipeline
 GOLD_MANUAL = Path(__file__).parent / "gold_manual.txt"
 GOLD_RE = re.compile(r"\{([^{}|]+)\|([A-Z]+)\}")
 DVSK_TRAIN = os.path.expanduser(os.getenv(
-    "DVSK_TRAIN", "~/Downloads/results/chisiec-ner/data/dvsk/dvsk_train.txt"))
+    "DVSK_TRAIN", "~/Downloads/kaggle_ckpts/gujiroberta_crf_maxlen256/dvsk_train.txt"))
 SEEN_NGRAM = 12  # chữ nằm trong một chuỗi 12 chữ có trong train → coi là "đã thấy"
 
 

@@ -5,16 +5,16 @@ pipeline.py — Tách câu (断句) + NER cho Hán văn cổ, nhiều model đ�
     guwen-punc  ethanyt/guwen-punc — khôi phục dấu câu, train trên chữ giản thể
     biaodian    raynardj/classical-chinese-punctuation-guwen-biaodian
     none        giữ nguyên dấu câu của input
-  NER (chọn nhiều): các checkpoint GuwenBERT fine-tune (xem NER_MODELS) + ethanyt/guwen-ner
-    công khai (chỉ NOUN / BOOK, giải mã argmax vì HF không kèm trọng số CRF).
+  NER (chọn nhiều): các model encoder + CRF của API (api/predictor.py — dùng chung
+    checkpoint và cách nạp) + ethanyt/guwen-ner công khai (chỉ NOUN / BOOK, giải mã
+    argmax vì HF không kèm trọng số CRF).
 
-GuwenBERT có vocab giản thể: ~24% chữ DVSKTT phồn thể thành [UNK]. Tuỳ chọn `simplify`
-đổi phồn → giản thể theo TỪNG CHỮ (giữ nguyên độ dài để offset không lệch) trước khi
-đưa vào NER; kết quả hiển thị trên chữ gốc. guwen-punc / guwen-ner luôn đổi.
+GuwenBERT / GujiRoBERTa_jian có vocab giản thể nên nhiều chữ DVSKTT phồn thể thành [UNK].
+Tuỳ chọn `simplify` đổi phồn → giản thể theo TỪNG CHỮ (giữ nguyên độ dài để offset không
+lệch) trước khi đưa vào NER; kết quả hiển thị trên chữ gốc. guwen-punc / guwen-ner luôn đổi.
 """
 from __future__ import annotations
 
-import json
 import os
 import re
 import sys
@@ -27,15 +27,15 @@ from transformers import AutoModelForTokenClassification, AutoTokenizer
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from src.models import GuwenBertCRF, GuwenBertLinear  # noqa: E402
+os.chdir(ROOT)  # đường dẫn checkpoint/label map của API là tương đối với gốc repo
 
-NER_BACKBONE = os.getenv("BACKBONE", "ethanyt/guwenbert-base")
-NER_LABEL_MAP = os.getenv("LABEL_MAP", str(ROOT / "artifacts/label_map.json"))
-NER_MAX_LEN = int(os.getenv("MAX_LEN", "128"))
 PUNC_WINDOW = 400  # số chữ mỗi lần đưa vào model ngắt câu (< 512 token)
+GUWEN_NER_MAX_LEN = 128
 
 DEVICE = torch.device("mps" if torch.backends.mps.is_available()
                       else "cuda" if torch.cuda.is_available() else "cpu")
+os.environ.setdefault("DEVICE", str(DEVICE))  # API predictor đọc DEVICE lúc import
+from api.predictor import NER_MODELS as API_MODELS, available_models, get_predictor  # noqa: E402
 
 SENT_END = "。？！；?!;"
 KEEP_PUNCT = set("，。：；？！、")  # bỏ ngoặc/nháy model sinh ra (hay lệch cặp)
@@ -49,27 +49,16 @@ SEGMENTERS = {
                  "simplify": False, "desc": "raynardj/…-guwen-biaodian"},
     "none": {"name": "Giữ nguyên", "desc": "Không ngắt lại — dùng dấu câu có sẵn trong input"},
 }
-CKPT = ROOT / "checkpoints"
-# TQ = 4 bộ sử Trung Quốc gộp (AnChineseNERE + CHisIEC + BEEVETA + C-CLUE, 11.386 câu train).
-# Tất cả fine-tune toàn bộ GuwenBERT (ethanyt/guwenbert-base), nhãn BIO PER/LOC/ORG/DTM/TITLE.
-# Nhóm DVSKTT: cùng xuất phát từ một checkpoint trung gian (không có trên máy) và train trên
-# data/dvsk/*.txt — bộ này nhãn lệch vị trí nặng và test trùng 81% với train.
-NER_MODELS = {
-    "gw-crf-tq": {"name": "GuwenBERT+CRF · TQ", "ckpt": CKPT / "best.pt", "head": "crf",
-                  "desc": "Fine-tune trên 4 bộ sử TQ, test F1 0.932 trên TQ (ancient_ner_models, 04/2026) — model của API"},
-    "gw-linear-tq": {"name": "GuwenBERT+Linear · TQ", "ckpt": CKPT / "compare/gw-linear-tq.pt", "head": "linear",
-                     "desc": "Như trên nhưng đầu Linear (argmax), không CRF (ancient_ner_models, 04/2026)"},
-    "gw-crf-dvsk": {"name": "GuwenBERT+CRF · DVSKTT", "ckpt": CKPT / "compare/gw-crf-dvsk.pt", "head": "crf",
-                    "desc": "Fine-tune trên DVSKTT (results/outputs/dvsk/guwenbert_crf, 06/2026)"},
-    "gw-linear-dvsk": {"name": "GuwenBERT+Linear · DVSKTT", "ckpt": CKPT / "compare/gw-linear-dvsk.pt", "head": "linear",
-                       "desc": "Fine-tune trên DVSKTT, đầu Linear (results/outputs/dvsk/guwenbert_finetune, 06/2026)"},
-    "gw-crf-dvsk-2": {"name": "GuwenBERT+CRF · DVSKTT (bản 2)", "ckpt": CKPT / "compare/gw-crf-jun.pt", "head": "crf",
-                      "desc": "results/outputs/guwenbert_crf (06/2026) — cùng gốc trọng số và cùng hành vi với nhóm DVSKTT"},
-    "guwen-ner": {"name": "guwen-ner (công khai)", "hf": "ethanyt/guwen-ner",
-                  "desc": "ethanyt/guwen-ner — chỉ NOUN (tên riêng) / BOOK, argmax (HF không kèm CRF)"},
+# Tên hiển thị cho các model của API (api/predictor.py); model nào chưa có checkpoint thì ẩn.
+API_MODEL_NAMES = {
+    "guwenbert-crf-tq": "GuwenBERT+CRF · TQ",
+    "sikubert-crf-dvsktt": "SikuBERT+CRF · DVSKTT",
+    "gujiroberta-crf-dvsktt": "GujiRoBERTa+CRF · DVSKTT",
 }
-# bỏ checkpoint không có trên máy này
-NER_MODELS = {k: v for k, v in NER_MODELS.items() if "hf" in v or Path(v["ckpt"]).exists()}
+NER_MODELS = {name: {"name": API_MODEL_NAMES.get(name, name), "desc": API_MODELS[name]["description"]}
+              for name in available_models()}
+NER_MODELS["guwen-ner"] = {"name": "guwen-ner (công khai)", "hf": "ethanyt/guwen-ner",
+                           "desc": "ethanyt/guwen-ner — chỉ NOUN (tên riêng) / BOOK, argmax (HF không kèm CRF)"}
 # nhãn của guwen-ner → nhãn hiển thị
 GUWEN_NER_LABELS = {"NOUN_OTHER": "NOUN", "NOUN_BOOKNAME": "BOOK"}
 
@@ -144,10 +133,11 @@ def split_sentences(text: str) -> List[str]:
 class NERTagger:
     """Chạy NER trên danh sách câu liền nhau; `tag_fn` gán nhãn BIO cho một batch đoạn văn."""
 
-    def __init__(self, tag_fn: Callable[[List[str]], List[List[str]]], always_simplify: bool = False):
+    def __init__(self, tag_fn: Callable[[List[str]], List[List[str]]], max_len: int,
+                 always_simplify: bool = False):
         self.tag_fn = tag_fn
         self.always_simplify = always_simplify
-        self.max_chars = NER_MAX_LEN - 2
+        self.max_chars = max_len - 2
 
     def _pieces(self, sent: str) -> List[Tuple[int, str]]:
         """Cắt text thành các đoạn <= max_chars, ưu tiên cắt sau dấu kết câu, rồi dấu phẩy."""
@@ -197,26 +187,10 @@ def _first_subtoken_labels(enc, texts: List[str], pred: List[List[int]], id2labe
     return result
 
 
-def load_checkpoint(ckpt: Path, head: str) -> NERTagger:
-    """Checkpoint GuwenBertCRF / GuwenBertLinear của src/models.py (cùng label map 11 nhãn)."""
-    with open(NER_LABEL_MAP, encoding="utf-8") as f:
-        id2label = {int(k): v for k, v in json.load(f)["id2label"].items()}
-    tok = AutoTokenizer.from_pretrained(NER_BACKBONE)
-    cls = GuwenBertCRF if head == "crf" else GuwenBertLinear
-    model = cls(NER_BACKBONE, len(id2label))
-    model.load_state_dict(torch.load(ckpt, map_location="cpu"))
-    model.to(DEVICE).eval()
-
-    @torch.no_grad()
-    def tag(texts: List[str]) -> List[List[str]]:
-        enc = tok([list(t) for t in texts], is_split_into_words=True, padding=True,
-                  truncation=True, max_length=NER_MAX_LEN, return_tensors="pt")
-        tti = enc.get("token_type_ids")
-        pred = model(enc["input_ids"].to(DEVICE), enc["attention_mask"].to(DEVICE),
-                     tti.to(DEVICE) if tti is not None else None)
-        return _first_subtoken_labels(enc, texts, pred, id2label)
-
-    return NERTagger(tag)
+def load_api_model(name: str) -> NERTagger:
+    """Model encoder + CRF của API (api/predictor.py): dùng chung Predictor.tag() theo batch."""
+    p = get_predictor(name)
+    return NERTagger(p.tag, p.max_len)
 
 
 def load_guwen_ner(hf_name: str) -> NERTagger:
@@ -234,11 +208,11 @@ def load_guwen_ner(hf_name: str) -> NERTagger:
     @torch.no_grad()
     def tag(texts: List[str]) -> List[List[str]]:
         enc = tok([list(t) for t in texts], is_split_into_words=True, padding=True,
-                  truncation=True, max_length=NER_MAX_LEN, return_tensors="pt")
+                  truncation=True, max_length=GUWEN_NER_MAX_LEN, return_tensors="pt")
         logits = model(**{k: v.to(DEVICE) for k, v in enc.items()}).logits
         return _first_subtoken_labels(enc, texts, logits.argmax(-1).tolist(), id2label)
 
-    return NERTagger(tag, always_simplify=True)
+    return NERTagger(tag, GUWEN_NER_MAX_LEN, always_simplify=True)
 
 
 def bio_to_spans(text: str, labels: List[str]) -> List[Dict]:
@@ -284,7 +258,7 @@ class Pipeline:
                 if "hf" in cfg:
                     self._taggers[name] = load_guwen_ner(cfg["hf"])
                 else:
-                    self._taggers[name] = load_checkpoint(cfg["ckpt"], cfg["head"])
+                    self._taggers[name] = load_api_model(name)
             return self._taggers[name]
 
     def segment(self, text: str, segmenter: str) -> List[str]:

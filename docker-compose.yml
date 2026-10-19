@@ -11,6 +11,9 @@ services:
 
     environment:
       - TZ=Asia/Ho_Chi_Minh
+      # NER model mặc định: guwenbert-crf-tq | sikubert-crf-dvsktt | gujiroberta-crf-dvsktt
+      # (request vẫn chọn được model khác qua trường "model", miễn có checkpoint trong ./checkpoints)
+      - NER_MODEL=guwenbert-crf-tq
       - CHECKPOINT_PATH=/app/checkpoints/best.pt
       - LABEL_MAP_PATH=/app/artifacts/label_map.json
 

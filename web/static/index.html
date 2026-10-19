@@ -417,7 +417,7 @@ $("#input").addEventListener("paste", e => {
 });
 
 // ── Khởi động ───────────────────────────────────────────────────────────────
-const DEFAULT_MODELS = ["gw-crf-tq", "guwen-ner"];
+const DEFAULT_MODELS = ["guwenbert-crf-tq", "sikubert-crf-dvsktt"];
 Promise.all([
   fetch("/api/info").then(r => r.json()),
   fetch("/static/hanviet.json").then(r => r.json()).catch(() => ({})),
@@ -429,7 +429,7 @@ Promise.all([
     `<label title="${esc(m.desc)}"><input type="checkbox" value="${m.id}" ${DEFAULT_MODELS.includes(m.id) ? "checked" : ""}> ${esc(m.name)}</label>`).join(""));
   $("#status").textContent = `Thiết bị: ${i.device} · model nạp khi dùng lần đầu`;
   render(); renderGold();
-  // link chia sẻ: ?manual=<id đoạn true label>&seg=…&models=mine,guwen-ner&hv=ruby
+  // link chia sẻ: ?manual=<id đoạn true label>&seg=…&models=guwenbert-crf-tq,sikubert-crf-dvsktt&hv=ruby
   const q = new URLSearchParams(location.search);
   if (q.get("seg")) $("#seg").value = q.get("seg");
   if (q.get("hv")) $("#hvmode").value = q.get("hv");
